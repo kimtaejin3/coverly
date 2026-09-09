@@ -110,8 +110,7 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
 
   // A cover made with a personal voice has no catalogue entry, and falling back to the first
   // voice would credit the cover to Aria. Nobody else can use that voice either, so it is named
-  // without identifying its owner and the "make one with this voice" call to action is dropped.
-  const personal = !catalogueVoice;
+  // without identifying its owner.
   const voice: Voice = catalogueVoice ?? {
     id: cover.voice_id,
     name: "직접 만든 목소리",
@@ -192,8 +191,8 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
                 </p>
               </div>
               <Button asChild size="lg" className="h-12 w-full text-base">
-                <Link href={personal ? "/" : `/?voice=${voice.id}`}>
-                  {personal ? "내 음원으로 만들어보기" : `${voice.name}으로 만들어보기`}
+                <Link href="/">
+                  내 음원으로 만들어보기
                   <ArrowRight className="size-4" weight="bold" aria-hidden />
                 </Link>
               </Button>
@@ -214,23 +213,33 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
           {isOwner ? (
             <section className="mt-10">
               <h2 className="font-semibold">다른 Voice로도 만들어보기</h2>
-              <div className="mt-4 grid gap-2">
-                {others.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/?voice=${item.id}`}
-                    className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/50"
-                  >
-                    <VoiceAvatar voiceId={item.id} name={item.name} className="size-10 rounded-xl" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{item.name}</span>
-                      <span className="block truncate text-sm text-muted-foreground">
-                        {item.description}
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
+                  준비 중
+                </span>
+                샘플 Voice는 2026년 10월 중 출시 예정이에요.
+              </p>
+              <div className="mt-3 cursor-not-allowed opacity-45" aria-disabled="true">
+                <div className="pointer-events-none grid gap-2" inert>
+                  {others.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                    >
+                      <VoiceAvatar
+                        voiceId={item.id}
+                        name={item.name}
+                        className="size-10 rounded-xl"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">{item.name}</span>
+                        <span className="block truncate text-sm text-muted-foreground">
+                          {item.description}
+                        </span>
                       </span>
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  </Link>
-                ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
           ) : null}
