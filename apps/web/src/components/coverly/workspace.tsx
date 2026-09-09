@@ -49,7 +49,12 @@ export function Workspace({
 
   const [song, setSong] = useState<UploadedSong | null>(null);
   const [startSeconds, setStartSeconds] = useState(PREVIEW.defaultStartSeconds);
-  const [voiceId, setVoiceId] = useState<string | null>(params.get("voice"));
+  // Catalogue voices are not selectable until they ship, so a ?voice=aria link must not
+  // pre-select one behind the disabled picker.
+  const requestedVoice = params.get("voice");
+  const [voiceId, setVoiceId] = useState<string | null>(
+    requestedVoice && voices.some((v) => v.id === requestedVoice) ? null : requestedVoice,
+  );
   const [coverId, setCoverId] = useState<string | null>(null);
   const [finished, setFinished] = useState<{
     id: string;
@@ -243,18 +248,27 @@ export function Workspace({
           </Field>
 
           <Field step={3} label="Voice 고르기">
-            <div className="space-y-3">
-              <VoicePicker
-                voices={voices}
-                selectedId={voiceId}
-                onSelect={(next) => setVoiceId(next.id)}
-              />
+            <div className="space-y-4">
               <MyVoice
                 initial={personalVoice}
                 selectedId={voiceId}
                 onSelect={(next) => setVoiceId(next.id)}
                 signedIn={signedIn}
               />
+
+              <div>
+                <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
+                    준비 중
+                  </span>
+                  샘플 Voice는 2026년 10월 중 출시 예정이에요.
+                </p>
+                <div className="cursor-not-allowed opacity-45" aria-disabled="true">
+                  <div className="pointer-events-none" inert>
+                    <VoicePicker voices={voices} selectedId={null} onSelect={() => {}} />
+                  </div>
+                </div>
+              </div>
             </div>
           </Field>
 
