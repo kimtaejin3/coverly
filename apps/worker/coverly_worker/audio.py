@@ -1,6 +1,7 @@
 """Thin wrappers around the ffmpeg/ffprobe binaries. No audio DSP happens in Python."""
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -51,27 +52,69 @@ def trim(input_path: Path, output_path: Path, start: float, duration: float | No
     return output_path
 
 
+def measure_loudness(path: Path) -> float | None:
+    """Integrated loudness in LUFS, or None when ffmpeg cannot measure it.
+
+    Peak level says nothing about how loud something sounds. A dense instrumental peaking at -4
+    is perceptually far louder than a vocal peaking at 0, which is how the vocal ended up buried
+    when the gains were set from peaks.
+    """
+    result = subprocess.run(
+        [_binary("ffmpeg"), "-hide_banner", "-nostats", "-i", str(path),
+         "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
+        capture_output=True, text=True, check=False,
+    )
+    match = re.findall(r"I:\s+(-?\d+(?:\.\d+)?)\s+LUFS", result.stderr)
+    if not match:
+        return None
+    value = float(match[-1])
+    # ffmpeg reports -70 or lower for silence; treat that as unmeasurable rather than as a level.
+    return value if value > -70.0 else None
+
+
+# How far the lead vocal sits above the instrumental, in LU. A pop lead sits clearly on top of
+# the backing rather than level with it.
+VOCAL_LEAD_LU = 4.0
+
+
 def mix(vocals_path: Path, instrumental_path: Path, output_path: Path,
-        vocal_gain_db: float = -3.5, instrumental_gain_db: float = 0.0, bitrate: str = "192k",
-        reverb: bool = True) -> Path:
+        vocal_gain_db: float | None = None, instrumental_gain_db: float = 0.0,
+        bitrate: str = "192k", reverb: bool = True, vocal_lead_lu: float = VOCAL_LEAD_LU) -> Path:
     """Sum converted vocals over the instrumental and encode to MP3.
 
-    Two things stop the result sounding pasted on:
+    The vocal gain is measured, not assumed. Demucs hands back stems at whatever level the source
+    had, and Seed-VC's output level varies with the reference, so any fixed number is wrong for
+    most songs. Both stems are measured in LUFS and the vocal is placed `vocal_lead_lu` above the
+    instrumental; pass `vocal_gain_db` to override.
 
-    * The converted vocal comes out of the vocoder hot — measured at 0.0 dB peak against an
-      instrumental sitting near -4 — so it lands in front of the track instead of in it. It is
-      pulled back by default.
-    * The instrumental keeps the room the original was recorded in; the converted vocal is bone
-      dry. A short stereo reverb, mixed low, puts the voice in the same space. `aecho` is used
-      rather than a convolution reverb so no impulse response has to ship with the worker.
+    The instrumental keeps the room the original was recorded in while the converted vocal is bone
+    dry, so a short stereo reverb, mixed low, puts the voice in the same space. `aecho` is used
+    rather than a convolution reverb so no impulse response has to ship with the worker.
 
     amix with normalize=0 keeps both stems at their own level; a limiter catches the peaks.
     duration=longest so a slightly shorter converted vocal never truncates the instrumental.
     """
+    if vocal_gain_db is None:
+        vocal_lufs = measure_loudness(vocals_path)
+        instrumental_lufs = measure_loudness(instrumental_path)
+        if vocal_lufs is None or instrumental_lufs is None:
+            # Better to sit slightly forward than to disappear, which is what -3.5 dB did.
+            vocal_gain_db = 1.0
+        else:
+            # Clamped: a mis-measured stem should not blow the mix apart in either direction.
+            delta = max(-12.0, min(18.0,
+                                   instrumental_lufs + vocal_lead_lu - vocal_lufs))
+            # Split the correction between lifting the vocal and ducking the instrumental. Putting
+            # it all on the vocal preserves the same balance but drives the sum into the limiter,
+            # which pumps; sharing it keeps the mix at roughly the level it already had.
+            vocal_gain_db = delta / 2.0
+            instrumental_gain_db -= delta / 2.0
+
     vocal_chain = f"aresample=44100,aformat=channel_layouts=stereo,volume={vocal_gain_db}dB"
     if reverb:
         # Short pre-delays at low gain read as room, not as an echo effect.
-        vocal_chain += ",aecho=0.85:0.85:38|63|97:0.22|0.15|0.09"
+        # Wetter than this and the reverb pushes the voice back behind the instrumental again.
+        vocal_chain += ",aecho=0.9:0.85:38|63|97:0.16|0.11|0.07"
     filter_graph = (
         f"[0:a]{vocal_chain}[v];"
         f"[1:a]aresample=44100,aformat=channel_layouts=stereo,volume={instrumental_gain_db}dB[i];"
