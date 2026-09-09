@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await admin
     .from("users")
-    .select("credit_balance, free_generations_used")
+    .select("credit_balance, free_generations_used, free_generation_limit")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) {
@@ -72,11 +72,12 @@ export async function POST(request: NextRequest) {
 
   // Free previews first, then credits. Paid full covers come in Phase 5.
   const used = profile.free_generations_used ?? 0;
-  if (used >= FREE_GENERATIONS_PER_ACCOUNT) {
+  // A per-account override exists so one tester can be given more without moving the limit for
+  // everyone; null means the app-wide default applies.
+  const limit = profile.free_generation_limit ?? FREE_GENERATIONS_PER_ACCOUNT;
+  if (used >= limit) {
     return NextResponse.json(
-      {
-        error: `무료 생성은 계정당 ${FREE_GENERATIONS_PER_ACCOUNT}회입니다. 전체 곡 생성은 곧 제공됩니다.`,
-      },
+      { error: `무료 생성은 계정당 ${limit}회입니다. 전체 곡 생성은 곧 제공됩니다.` },
       { status: 402 },
     );
   }
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
   await admin.from("generation_jobs").insert({ cover_id: cover.id, status: "queued" });
   await admin
     .from("users")
-    .update({ free_generations_used: used + 1, free_generation_used: used + 1 >= FREE_GENERATIONS_PER_ACCOUNT })
+    .update({ free_generations_used: used + 1, free_generation_used: used + 1 >= limit })
     .eq("id", user.id);
 
   await notifyWorker(cover.id);
