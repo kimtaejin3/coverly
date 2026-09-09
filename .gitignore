@@ -1,0 +1,32 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+# worker artefacts
+apps/worker/vendor/
+apps/worker/samples/*
+!apps/worker/samples/.gitkeep
+apps/worker/voices/*
+!apps/worker/voices/README.md
+apps/worker/bench_out/
+apps/worker/work/
+apps/worker/output*.mp3
+apps/worker/checkpoints/
+# Training audio: the raw VocalSet download plus every clip derived from it. Multi-GB, and
+# reproducible from scripts/prepare_vocalset.py, so it never belongs in the repo.
+apps/worker/datasets/*
+!apps/worker/datasets/README.md
+# The raw downloads live at the repo root too, and VocalSet alone is 2 GB.
+datasets/
+!datasets/README.md
+# node (later phases)
+node_modules/
+.next/
+# os
+.DS_Store
+
+# local secret, never commit
+.supabase-db-password
+.worker-shared-secret

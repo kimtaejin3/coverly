@@ -1,0 +1,123 @@
+"""Reading a personal-voice recording before it costs twenty GPU-minutes.
+
+Two things went wrong with the catalogue voices and both apply here. The reference clip was cut
+from the start of the audio, which is whichever register the singer happened to begin in; and
+nothing checked that the recording contained singing at all. A 20-minute fine-tune on a silent or
+spoken take produces a voice that cannot be salvaged, and the owner only finds out at the end.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+SAMPLE_RATE = 16000
+# 아리랑 covers roughly an octave; sung in two keys it should clear this comfortably. The floor is
+# set to catch speaking and monotone humming, not to grade the performance.
+MIN_SPAN_SEMITONES = 6.0
+MIN_VOICED_RATIO = 0.20
+MIN_RMS_DB = -42.0
+MIN_DURATION = 25.0
+
+
+@dataclass
+class RecordingStats:
+    duration: float
+    voiced_ratio: float
+    rms_db: float
+    f0_low: float
+    f0_median: float
+    f0_high: float
+    span_semitones: float
+    times: np.ndarray
+    f0: np.ndarray
+
+
+def analyse(path: Path) -> RecordingStats:
+    import librosa
+
+    y, sr = librosa.load(path, sr=SAMPLE_RATE, mono=True)
+    duration = float(len(y)) / sr if sr else 0.0
+    rms = float(np.sqrt(np.mean(np.square(y)))) if y.size else 0.0
+    rms_db = 20.0 * float(np.log10(max(rms, 1e-9)))
+
+    hop = 256
+    f0, voiced_flag, _ = librosa.pyin(
+        y, fmin=70, fmax=1000, sr=sr, frame_length=1024, hop_length=hop,
+    )
+    times = librosa.times_like(f0, sr=sr, hop_length=hop)
+    voiced = np.isfinite(f0) & voiced_flag
+    ratio = float(voiced.mean()) if voiced.size else 0.0
+
+    if voiced.sum() < 20:
+        return RecordingStats(duration, ratio, rms_db, 0.0, 0.0, 0.0, 0.0, times, f0)
+
+    values = f0[voiced]
+    low, median, high = (float(v) for v in np.percentile(values, [10, 50, 90]))
+    span = 12.0 * float(np.log2(high / low)) if low > 0 else 0.0
+    return RecordingStats(duration, ratio, rms_db, low, median, high, span, times, f0)
+
+
+def validate(stats: RecordingStats) -> str | None:
+    """A Korean sentence the owner can act on, or None when the take is usable."""
+    if stats.duration < MIN_DURATION:
+        return f"녹음이 {stats.duration:.0f}초밖에 안 돼요. 30초 이상 불러주세요."
+    if stats.rms_db < MIN_RMS_DB:
+        return "소리가 너무 작아요. 마이크에 가까이서 다시 불러주세요."
+    if stats.voiced_ratio < MIN_VOICED_RATIO:
+        return "노래하는 소리를 거의 찾지 못했어요. 조용한 곳에서 다시 녹음해 주세요."
+    if stats.span_semitones < MIN_SPAN_SEMITONES:
+        return (
+            "음이 거의 한 높이에 머물러 있어요. 같은 곡을 낮은 키로 한 번, "
+            "높은 키로 한 번 불러주세요."
+        )
+    return None
+
+
+def reference_windows(stats: RecordingStats, total_seconds: float = 21.0,
+                      parts: int = 3) -> list[tuple[float, float]]:
+    """(start, length) windows covering the low, middle and high of what was actually sung.
+
+    Seed-VC copies timbre from this clip, so it decides which register the voice sounds right in.
+    Cutting it from the first 22 seconds meant cutting it from the low take alone.
+    """
+    voiced = np.isfinite(stats.f0)
+    if stats.duration <= total_seconds or voiced.sum() < 20:
+        return [(0.0, min(total_seconds, stats.duration))]
+
+    length = total_seconds / parts
+    # Median pitch of each candidate window, so windows are ranked by register rather than time.
+    step = length / 2.0
+    candidates: list[tuple[float, float]] = []
+    start = 0.0
+    while start + length <= stats.duration:
+        mask = voiced & (stats.times >= start) & (stats.times < start + length)
+        if mask.sum() >= 10:
+            candidates.append((float(np.median(stats.f0[mask])), start))
+        start += step
+
+    if len(candidates) < parts:
+        return [(0.0, min(total_seconds, stats.duration))]
+
+    candidates.sort()
+    picks: list[float] = []
+    for fraction in np.linspace(0.1, 0.9, parts):
+        target = min(len(candidates) - 1, int(len(candidates) * fraction))
+        # Windows overlap by design (they step by half a length), so walk outwards from the wanted
+        # register until one lands clear of what is already picked. Otherwise the reference can
+        # repeat the same two seconds three times.
+        for offset in range(len(candidates)):
+            for index in {target - offset, target + offset}:
+                if not 0 <= index < len(candidates):
+                    continue
+                start = candidates[index][1]
+                if all(abs(start - chosen) >= length for chosen in picks):
+                    picks.append(start)
+                    break
+            else:
+                continue
+            break
+
+    # Play them back in time order so the clip sounds like one continuous take.
+    return [(start, length) for start in sorted(picks)]

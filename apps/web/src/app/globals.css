@@ -1,0 +1,289 @@
+/* Pretendard is the de facto Korean UI face; Geist has no Hangul, so Korean was falling back to
+   whatever the OS provided and the type looked different on every machine. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Geist", "Geist Fallback", "Pretendard Variable", Pretendard, -apple-system, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-heading: "Geist", "Geist Fallback", "Pretendard Variable", Pretendard, -apple-system, ui-sans-serif, system-ui, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Warm off-white, never pure #fff: paper, not a lightbox. */
+  --background: oklch(0.987 0.003 70);
+  --foreground: oklch(0.212 0.012 40);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.212 0.012 40);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.212 0.012 40);
+  /* Coral vermilion. Warm and energetic, and far from both the AI violet and the amber it
+     replaces; chroma held at 0.17 so it reads considered rather than neon. */
+  --primary: oklch(0.632 0.176 29);
+  --primary-foreground: oklch(0.995 0.003 60);
+  --secondary: oklch(0.958 0.005 60);
+  --secondary-foreground: oklch(0.302 0.014 40);
+  --muted: oklch(0.958 0.005 60);
+  --muted-foreground: oklch(0.512 0.014 45);
+  --accent: oklch(0.952 0.014 35);
+  --accent-foreground: oklch(0.302 0.014 40);
+  --destructive: oklch(0.58 0.19 27);
+  --border: oklch(0.29 0.02 40 / 11%);
+  --input: oklch(0.29 0.02 40 / 15%);
+  --ring: oklch(0.632 0.176 29);
+  --chart-1: oklch(0.632 0.176 29);
+  --chart-2: oklch(0.7 0.14 15);
+  --chart-3: oklch(0.72 0.1 55);
+  --chart-4: oklch(0.6 0.02 45);
+  --chart-5: oklch(0.42 0.015 45);
+  --radius: 0.75rem;
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.212 0.012 40);
+  --sidebar-primary: oklch(0.632 0.176 29);
+  --sidebar-primary-foreground: oklch(0.995 0.003 60);
+  --sidebar-accent: oklch(0.958 0.005 60);
+  --sidebar-accent-foreground: oklch(0.302 0.014 40);
+  --sidebar-border: oklch(0.29 0.02 40 / 11%);
+  --sidebar-ring: oklch(0.632 0.176 29);
+}
+
+.dark {
+  --background: oklch(0.148 0.006 70);
+  --foreground: oklch(0.972 0.004 80);
+  --card: oklch(0.196 0.007 70);
+  --card-foreground: oklch(0.972 0.004 80);
+  --popover: oklch(0.196 0.007 70);
+  --popover-foreground: oklch(0.972 0.004 80);
+  --primary: oklch(0.79 0.142 76);
+  --primary-foreground: oklch(0.19 0.03 70);
+  --secondary: oklch(0.253 0.008 70);
+  --secondary-foreground: oklch(0.972 0.004 80);
+  --muted: oklch(0.253 0.008 70);
+  --muted-foreground: oklch(0.712 0.012 75);
+  --accent: oklch(0.276 0.016 72);
+  --accent-foreground: oklch(0.972 0.004 80);
+  --destructive: oklch(0.648 0.17 27);
+  --border: oklch(0.95 0.02 80 / 11%);
+  --input: oklch(0.95 0.02 80 / 16%);
+  --ring: oklch(0.79 0.142 76);
+  --chart-1: oklch(0.79 0.142 76);
+  --chart-2: oklch(0.7 0.12 45);
+  --chart-3: oklch(0.66 0.09 110);
+  --chart-4: oklch(0.556 0.01 75);
+  --chart-5: oklch(0.371 0.008 75);
+  --sidebar: oklch(0.196 0.007 70);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.79 0.142 76);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.79 0.142 76);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+@layer base {
+  /* Instagram traffic lands on phones: never let a wide element scroll the page sideways. */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Large type reads as flabby at default tracking; tighten it and let the browser avoid orphans. */
+  h1,
+  h2 {
+    letter-spacing: -0.028em;
+    text-wrap: balance;
+  }
+
+  h3 {
+    letter-spacing: -0.018em;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Durations, prices and counts must not jitter as digits change. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /* A fixed grain layer keeps flat dark surfaces from reading as dead vector fills. */
+  .grain::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+    opacity: 0.02;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Slow drifting colour behind the page. Three analogous blobs of one hue family, blurred and
+     animated with transform only so it stays on the compositor and never repaints layout. */
+  .aurora {
+    position: relative;
+    isolation: isolate;
+  }
+
+  /* The sidebar scrolls independently, so its scrollbar is on screen constantly. The platform
+     default is a heavy grey slab that competes with the controls; this is a thin track in the
+     page's own palette that only darkens while the pointer is in the panel. */
+  .scroll-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 14%, transparent) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .scroll-subtle::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scroll-subtle::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scroll-subtle::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: color-mix(in oklab, var(--foreground) 13%, transparent);
+    /* A transparent border inset by the background keeps the thumb visually thin without
+       shrinking the hit area below what a pointer can comfortably grab. */
+    border: 3px solid transparent;
+    background-clip: content-box;
+    transition: background-color 150ms ease;
+  }
+
+  .scroll-subtle:hover::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 24%, transparent);
+  }
+
+  .scroll-subtle::-webkit-scrollbar-thumb:active {
+    background-color: color-mix(in oklab, var(--primary) 62%, transparent);
+  }
+
+  .scroll-subtle::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Confined to a band at the top and faded out downward: the movement reads as light falling
+     into the page, and the working area below stays plain paper. */
+  .aurora::before {
+    content: "";
+    position: absolute;
+    inset: -14rem -10% auto -10%;
+    height: 38rem;
+    z-index: -1;
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, #000 0%, #000 42%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 42%, transparent 100%);
+    background-image:
+      radial-gradient(
+        38% 42% at 18% 28%,
+        color-mix(in oklab, var(--primary) 30%, transparent) 0%,
+        transparent 62%
+      ),
+      radial-gradient(
+        34% 38% at 78% 18%,
+        color-mix(in oklab, oklch(0.74 0.13 8) 26%, transparent) 0%,
+        transparent 62%
+      ),
+      radial-gradient(
+        44% 46% at 55% 82%,
+        color-mix(in oklab, oklch(0.8 0.11 62) 24%, transparent) 0%,
+        transparent 66%
+      );
+    filter: blur(64px);
+    animation: aurora-drift 26s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+
+  @keyframes aurora-drift {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(-4%, 3%, 0) scale(1.09);
+    }
+    100% {
+      transform: translate3d(3%, -2%, 0) scale(1.04);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .aurora::before {
+      animation: none;
+    }
+  }
+}
