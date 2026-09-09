@@ -6,29 +6,33 @@ import { SiteHeader } from "@/components/coverly/site-header";
 import { Workspace } from "@/components/coverly/workspace";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/server";
-import { listRecentCovers, listVoices } from "@/lib/supabase/queries";
+import { listRecentCovers, listVoices, type RecentCover } from "@/lib/supabase/queries";
 import { getSessionUser } from "@/lib/supabase/session";
 
 export const metadata: Metadata = {
   title: "Coverly — 좋아하는 노래를 새로운 목소리로",
 };
 
+async function loadPersonalVoice(): Promise<PersonalVoice | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("voices")
+    .select("id, name, status, error_message, training_progress, training_stage")
+    // Excluding the catalogue leaves only rows the "owner reads own voices" policy allows,
+    // so this can only ever return the caller's own voice.
+    .not("owner_user_id", "is", null)
+    .maybeSingle();
+  return (data as PersonalVoice | null) ?? null;
+}
+
 export default async function HomePage() {
   const [voices, user] = await Promise.all([listVoices(), getSessionUser()]);
-  const recent = user ? await listRecentCovers(6) : [];
 
-  let personalVoice: PersonalVoice | null = null;
-  if (user) {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("voices")
-      .select("id, name, status, error_message, training_progress, training_stage")
-      // Excluding the catalogue leaves only rows the "owner reads own voices" policy allows,
-      // so this can only ever return the caller's own voice.
-      .not("owner_user_id", "is", null)
-      .maybeSingle();
-    personalVoice = (data as PersonalVoice | null) ?? null;
-  }
+  // These two do not depend on each other, and a serial await here costs a full round trip to
+  // Supabase before the page can render.
+  const [recent, personalVoice] = user
+    ? await Promise.all([listRecentCovers(6), loadPersonalVoice()])
+    : [[] as RecentCover[], null];
 
   return (
     <>
