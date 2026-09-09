@@ -26,6 +26,7 @@ export const metadata: Metadata = {
 interface CoverRow {
   id: string;
   voice_id: string;
+  share_expires_at: string;
   title: string;
   status: string;
   preview_duration_seconds: number | null;
@@ -52,7 +53,7 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
   if (user) {
     const { data } = await supabase
       .from("covers")
-      .select("id, voice_id, title, status, preview_duration_seconds, result_url, share_token")
+      .select("id, voice_id, title, status, preview_duration_seconds, result_url, share_token, share_expires_at")
       .eq("id", coverId)
       .maybeSingle();
     if (data) {
@@ -61,14 +62,39 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
     }
   }
 
+  let expired = false;
   if (!cover && token) {
     const { data } = await createAdminClient()
       .from("covers")
-      .select("id, voice_id, title, status, preview_duration_seconds, result_url, share_token")
+      .select("id, voice_id, title, status, preview_duration_seconds, result_url, share_token, share_expires_at")
       .eq("id", coverId)
       .eq("share_token", token)
       .maybeSingle();
-    cover = (data as CoverRow | null) ?? null;
+    const row = (data as CoverRow | null) ?? null;
+    if (row && new Date(row.share_expires_at) < new Date()) {
+      expired = true;
+    } else {
+      cover = row;
+    }
+  }
+
+  if (expired) {
+    return (
+      <div className="flex min-h-dvh flex-col">
+        <SiteHeader />
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-16 text-center">
+          <h1 className="text-xl font-semibold">링크가 만료되었어요</h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            공유 링크는 만든 날로부터 30일 동안만 열립니다. 만든 사람에게 새 링크를 요청해
+            주세요.
+          </p>
+          <Button asChild className="mt-6">
+            <Link href="/">직접 만들어보기</Link>
+          </Button>
+        </main>
+        <SiteFooter />
+      </div>
+    );
   }
 
   if (!cover) {
@@ -178,7 +204,9 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
             <Info className="size-4" aria-hidden />
             <AlertDescription className="leading-relaxed">
               {isOwner
-                ? "링크를 아는 사람은 로그인 없이 이 커버를 들을 수 있습니다. 원곡의 권리 관계를 확인한 뒤 공유해 주세요."
+                ? `링크를 아는 사람은 로그인 없이 이 커버를 들을 수 있고, 링크는 ${new Date(
+                    cover.share_expires_at,
+                  ).toLocaleDateString("ko-KR")}까지 열립니다. 원곡의 권리 관계를 확인한 뒤 공유해 주세요.`
                 : "이 음원은 AI로 생성된 커버입니다. 원곡의 권리는 원저작자에게 있습니다."}
             </AlertDescription>
           </Alert>

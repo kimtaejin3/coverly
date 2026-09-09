@@ -51,13 +51,33 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-medium text-foreground">신고 및 삭제</h2>
+            <h2 className="text-base font-medium text-foreground">공유 링크</h2>
             <p className="mt-2">
-              권리 침해가 의심되는 콘텐츠는{" "}
-              <a href="mailto:report@coverly.app" className="text-foreground underline underline-offset-4">
-                report@coverly.app
+              커버의 공유 링크는 생성일로부터 30일이 지나면 열리지 않습니다. 만료된 링크로는 결과물이
+              재생되지 않으며, 만든 이용자 본인은 언제든 계정에서 결과물을 확인할 수 있습니다.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-medium text-foreground">
+              복제·전송 중단 요구 (저작권법 제103조)
+            </h2>
+            <p className="mt-2">
+              권리 침해가 의심되는 콘텐츠의 복제·전송 중단 요구는 아래 담당자에게 접수합니다.
+            </p>
+            <p className="mt-3">
+              담당자: 김태진 ·{" "}
+              <a
+                href="mailto:ktj3727@gmail.com"
+                className="text-foreground underline underline-offset-4"
+              >
+                ktj3727@gmail.com
               </a>
-              으로 알려주시면 확인 후 조치합니다.
+            </p>
+            <p className="mt-3">
+              소명 자료와 함께 접수해 주시면 지체 없이 해당 콘텐츠의 공유 링크를 차단하고 결과물을
+              삭제한 뒤, 처리 결과를 회신합니다. 반복적으로 권한 없는 음원을 업로드한 계정은 이용을
+              제한합니다.
             </p>
           </section>
         </div>

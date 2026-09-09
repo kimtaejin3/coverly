@@ -21,7 +21,7 @@ export function SiteFooter() {
           <Link href="/legal/privacy" className="transition-colors hover:text-foreground">
             개인정보 처리방침
           </Link>
-          <a href="mailto:report@coverly.app" className="transition-colors hover:text-foreground">
+          <a href="mailto:ktj3727@gmail.com" className="transition-colors hover:text-foreground">
             신고 및 삭제 요청
           </a>
           <span className="ml-auto">© {new Date().getFullYear()} Coverly</span>
