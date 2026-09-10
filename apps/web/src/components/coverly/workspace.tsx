@@ -212,7 +212,7 @@ export function Workspace({
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-6 lg:grid-cols-[22rem_1fr] lg:gap-10 lg:px-6">
       {/* Controls. Sticky on desktop so the result can scroll independently of the form. */}
-      <aside className="scroll-subtle lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-2">
+      <aside className="scroll-subtle min-w-0 lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:pr-2">
         <div className="space-y-7">
           <Field step={1} label={YOUTUBE_ENABLED ? "노래 가져오기" : "노래 올리기"}>
             <SourcePicker
@@ -342,7 +342,7 @@ export function Workspace({
         </div>
       </aside>
 
-      <div className="lg:border-l lg:border-border/60 lg:pl-10">
+      <div className="min-w-0 lg:border-l lg:border-border/60 lg:pl-10">
         <ResultPane
           state={paneState}
           onDone={(audioUrl, shareUrl) => {

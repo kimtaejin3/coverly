@@ -146,7 +146,7 @@ export function ResultPane({
           </li>
         ))}
       </ol>
-      <p className="mt-8 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="mt-8 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         <MusicNotes className="size-3.5" aria-hidden />
         MP3, WAV, M4A · 최대 50MB · 5분 이내
       </p>

@@ -41,7 +41,7 @@ export default async function HomePage() {
         {/* useSearchParams inside Workspace needs a boundary or the route bails to client render. */}
         <Suspense
           fallback={
-            <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-6 lg:grid-cols-[22rem_1fr]">
+            <div className="mx-auto grid w-full max-w-7xl gap-8 px-4 py-6 lg:grid-cols-[22rem_1fr] [&>*]:min-w-0">
               <Skeleton className="h-96 rounded-2xl" />
               <Skeleton className="h-96 rounded-2xl" />
             </div>
