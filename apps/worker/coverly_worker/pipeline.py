@@ -6,7 +6,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .audio import mix, probe_duration, transpose, trim
+from .audio import match_loudness, measure_loudness, mix, probe_duration, transpose, trim
 from .device import VramSampler, describe_gpu
 from .metrics import GenerationMetrics, StageTimer
 from .separation import Separator
@@ -94,7 +94,10 @@ def run_generation(request: GenerationRequest, separator: Separator, provider: V
                 instrumental = transpose(
                     instrumental, work_dir / "instrumental_shifted.wav", backing_shift
                 )
-            mix(converted, instrumental, request.output_path)
+            # Match the upload's own loudness. The listener's reference is the track they just
+            # played, not a streaming target.
+            mix(converted, instrumental, request.output_path,
+                target_lufs=match_loudness(measure_loudness(trimmed)))
 
         metrics = GenerationMetrics(
             audio_duration_seconds=section_seconds,

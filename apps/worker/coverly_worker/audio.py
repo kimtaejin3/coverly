@@ -77,9 +77,24 @@ def measure_loudness(path: Path) -> float | None:
 # the backing rather than level with it.
 VOCAL_LEAD_LU = 4.0
 
-# Where the finished mix lands. Without a target the loudness of a cover follows whatever the
-# source happened to be, so two covers in a row jump in level.
+# Where the finished mix lands when the source cannot be measured. -14 LUFS is the streaming
+# normalisation target, but nobody listens to a cover through a normaliser -- they play it right
+# after the song they uploaded, and commercial masters run -8 to -11 LUFS. Matching the source is
+# what makes the two sound like the same volume; see `match_loudness`.
 TARGET_LUFS = -14.0
+
+# Bounds for matching the source. The floor keeps a quietly mastered upload from producing a
+# cover nobody can hear; the ceiling is where pushing a limiter this hard starts to pump, and the
+# instrumental arrives already mastered so there is little headroom left to take.
+LOUDNESS_MATCH_RANGE = (-16.0, -8.0)
+
+
+def match_loudness(source_lufs: float | None) -> float:
+    """The level a cover of this source should land on."""
+    if source_lufs is None:
+        return TARGET_LUFS
+    low, high = LOUDNESS_MATCH_RANGE
+    return max(low, min(high, source_lufs))
 
 # The converted vocal arrives with no processing at all: vocoder output, dry, and as uneven as the
 # singer was. Raising its average level alone leaves the quiet phrases buried, which is a dynamics
