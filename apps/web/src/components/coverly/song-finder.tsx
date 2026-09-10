@@ -41,10 +41,8 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
       song,
       shift: voiceTop && song.f0_high ? semitonesBetween(song.f0_high, voiceTop) : null,
     }));
-    if (!voiceTop) return scored.slice(0, 12);
-    return scored
-      .sort((a, b) => Math.abs(a.shift ?? 99) - Math.abs(b.shift ?? 99))
-      .slice(0, 12);
+    if (!voiceTop) return scored;
+    return [...scored].sort((a, b) => Math.abs(a.shift ?? 99) - Math.abs(b.shift ?? 99));
   }, [songs, genre, voiceTop]);
 
   return (
@@ -99,7 +97,7 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
           {songs === null ? (
             <p className="py-2 text-xs text-muted-foreground">불러오는 중…</p>
           ) : (
-            <ul className="space-y-0.5">
+            <ul className="scroll-subtle max-h-64 space-y-0.5 overflow-y-auto pr-1">
               {ranked.map(({ song, shift }) => (
                 <li
                   key={`${song.artist}-${song.title}`}
