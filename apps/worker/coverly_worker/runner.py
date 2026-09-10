@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import subprocess
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from .audio import trim
@@ -91,8 +92,13 @@ def split_title(raw: str) -> tuple[str, str]:
     Only the "가수 - 제목" shape is accepted. Guessing at anything looser would fill the song
     table with junk that then gets recommended to people.
     """
-    cleaned = _NOISE.sub(" ", raw)
+    # Filenames from macOS are NFD: "거미" arrives as four code points and will not match the
+    # composed form, so the same song quietly becomes two rows.
+    cleaned = _NOISE.sub(" ", unicodedata.normalize("NFC", raw))
     cleaned = re.sub(r"\.(mp3|wav|m4a|flac|webm)$", " ", cleaned, flags=re.IGNORECASE)
+    # "기억해줘요 내 모든 날과 그때를 호텔델루나 OST" is one song and one drama; only the first
+    # half names the song, and leaving the rest on splits the same track into several rows.
+    cleaned = re.sub(r"\s*\S+\s+OST\s*$", " ", cleaned, flags=re.IGNORECASE)
     parts = re.split(r"\s+[-–—]\s+", cleaned, maxsplit=1)
     if len(parts) != 2:
         return "", ""
