@@ -180,7 +180,7 @@ class Backend:
         })
 
     def record_song_range(self, title: str, artist: str, low: float, median: float,
-                          high: float) -> None:
+                          high: float, peak: float = 0.0) -> None:
         """Teach song_ranges what this upload actually measured.
 
         A measured row always beats a seed estimate. Repeated measurements of the same song are
@@ -196,6 +196,7 @@ class Backend:
             self._rest("POST", "song_ranges", json={
                 "title": title.strip()[:200], "artist": artist.strip()[:100],
                 "f0_low": low, "f0_median": median, "f0_high": high,
+                "f0_peak": peak or None,
                 "source": "measured", "measured_count": 1})
             return
 
@@ -206,6 +207,7 @@ class Backend:
             "f0_low": blend(row.get("f0_low") or low, low),
             "f0_median": blend(row.get("f0_median") or median, median),
             "f0_high": blend(row.get("f0_high") or high, high),
+            "f0_peak": blend(row.get("f0_peak") or peak, peak) if peak else row.get("f0_peak"),
             "source": "measured", "measured_count": n + 1,
             "updated_at": "now()"})
 

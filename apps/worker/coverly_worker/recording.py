@@ -29,6 +29,10 @@ class RecordingStats:
     f0_low: float
     f0_median: float
     f0_high: float
+    #: Near the actual top of what was sung. f0_high is the 90th percentile -- the top of the
+    #: *comfortable* range -- and a song's few highest notes sit well above it. Those notes are
+    #: what a voice model cannot reach and what makes a cover crack, so matching needs this.
+    f0_peak: float
     span_semitones: float
     times: np.ndarray
     f0: np.ndarray
@@ -51,12 +55,14 @@ def analyse(path: Path) -> RecordingStats:
     ratio = float(voiced.mean()) if voiced.size else 0.0
 
     if voiced.sum() < 20:
-        return RecordingStats(duration, ratio, rms_db, 0.0, 0.0, 0.0, 0.0, times, f0)
+        return RecordingStats(duration, ratio, rms_db, 0.0, 0.0, 0.0, 0.0, 0.0, times, f0)
 
     values = f0[voiced]
-    low, median, high = (float(v) for v in np.percentile(values, [10, 50, 90]))
+    # 98th rather than the maximum: one cracked note or one octave-error from the tracker should
+    # not define where a singer's ceiling is.
+    low, median, high, peak = (float(v) for v in np.percentile(values, [10, 50, 90, 98]))
     span = 12.0 * float(np.log2(high / low)) if low > 0 else 0.0
-    return RecordingStats(duration, ratio, rms_db, low, median, high, span, times, f0)
+    return RecordingStats(duration, ratio, rms_db, low, median, high, peak, span, times, f0)
 
 
 def validate(stats: RecordingStats) -> str | None:

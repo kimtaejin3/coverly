@@ -213,7 +213,8 @@ def process_job(
                 title, artist = split_title(job.title or "")
                 if artist:
                     backend.record_song_range(title, artist, source_stats.f0_low,
-                                              source_stats.f0_median, source_stats.f0_high)
+                                              source_stats.f0_median, source_stats.f0_high,
+                                              source_stats.f0_peak)
             except (BackendError, Exception):  # noqa: B014 - same reason as the metrics row
                 pass
 

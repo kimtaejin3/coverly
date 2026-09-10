@@ -18,7 +18,7 @@ const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
  * trained on. So the ranking is by distance from the singer's median, not by whether they can
  * reach the original key.
  */
-export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
+export function SongFinder({ voicePeak }: { voicePeak: number | null }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
   const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
   const [open, setOpen] = useState(false);
@@ -35,15 +35,15 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
   const ranked = useMemo((): { song: SongRange; shift: number | null }[] => {
     if (!songs) return [];
     const filtered = genre === "전체" ? songs : songs.filter((s) => s.genre === genre);
-    // Peaks against peaks: the top note is the figure published for songs and measured for the
-    // singer, and lining the peaks up lines the ranges up.
+    // Peak against peak. Comparing a song's highest note to a singer's *comfortable* ceiling is
+    // what made 공허해 read as two semitones away while its actual high notes were out of reach.
     const scored = filtered.map((song) => ({
       song,
-      shift: voiceTop && song.f0_high ? semitonesBetween(song.f0_high, voiceTop) : null,
+      shift: voicePeak && song.f0_peak ? semitonesBetween(song.f0_peak, voicePeak) : null,
     }));
-    if (!voiceTop) return scored;
+    if (!voicePeak) return scored;
     return [...scored].sort((a, b) => Math.abs(a.shift ?? 99) - Math.abs(b.shift ?? 99));
-  }, [songs, genre, voiceTop]);
+  }, [songs, genre, voicePeak]);
 
   return (
     <div className="rounded-xl border border-border bg-card/50">
@@ -64,11 +64,11 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
 
       {open ? (
         <div className="space-y-2.5 border-t border-border/60 px-3 py-3">
-          {voiceTop ? (
+          {voicePeak ? (
             <p className="text-xs text-muted-foreground">
-              내 최고음{" "}
-              <span className="font-medium text-foreground">{noteName(voiceTop)}</span> 기준, 키를
-              적게 옮겨도 되는 순서예요.
+              내가 낸 가장 높은 음{" "}
+              <span className="font-medium text-foreground">{noteName(voicePeak)}</span> 과(와) 곡의
+              최고음을 견줘, 키를 적게 옮겨도 되는 순서예요.
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -108,7 +108,7 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
                     <span className="block truncate text-xs text-muted-foreground">
                       {song.artist}
                       {song.top_note ? ` · 최고음 ${song.top_note}` : ""}
-                      {song.source === "seed" ? " · 음역 미확인" : ""}
+                      {song.f0_peak ? "" : " · 최고음 미확인"}
                     </span>
                   </span>
                   {shift !== null ? (

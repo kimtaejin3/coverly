@@ -21,6 +21,7 @@ export interface PersonalVoice {
   f0_low: number | null;
   f0_median: number | null;
   f0_high: number | null;
+  f0_peak: number | null;
 }
 
 /**

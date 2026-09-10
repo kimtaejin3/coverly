@@ -9,6 +9,7 @@ export interface SongRange {
   f0_low: number | null;
   f0_median: number;
   f0_high: number | null;
+  f0_peak: number | null;
   top_note: string | null;
   source: "seed" | "reference" | "measured";
 }
@@ -23,7 +24,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("song_ranges")
-    .select("title, artist, genre, f0_low, f0_median, f0_high, top_note, source")
+    .select("title, artist, genre, f0_low, f0_median, f0_high, f0_peak, top_note, source")
     .order("f0_median");
 
   if (error) {
