@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ResultPane, type PaneState } from "@/components/coverly/result-pane";
 import { SectionPicker } from "@/components/coverly/section-picker";
 import { CouponForm } from "@/components/coverly/coupon-form";
+import { SongFinder } from "@/components/coverly/song-finder";
 import { MyVoice, type PersonalVoice } from "@/components/coverly/my-voice";
 import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-picker";
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
@@ -252,6 +253,10 @@ export function Workspace({
               </p>
             )}
           </Field>
+
+          <div className="mb-5">
+            <SongFinder voiceMedian={personalVoice?.f0_median ?? null} />
+          </div>
 
           <Field step={3} label="Voice 고르기">
             <div className="space-y-4">

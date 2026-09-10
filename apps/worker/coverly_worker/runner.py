@@ -5,6 +5,7 @@ fetch the source, run the pipeline, upload the result, record what it cost.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -13,6 +14,7 @@ from .audio import trim
 from .backend import Backend, BackendError, Job
 from .metrics import GPU_PRICES_USD_PER_SECOND, estimate_cost
 from .pipeline import GenerationRequest, run_generation, split_shift
+from .recording import analyse
 from .separation import Separator
 from .voice_conversion import VoiceConversionProvider
 
@@ -77,6 +79,30 @@ def _download_youtube(url: str, work_dir: Path) -> Path:
     return produced[0]
 
 
+# Uploads are named after whatever file or video they came from, so the useful part is buried in
+# noise: "린(LYn) - ...사랑했잖아... [가사Lyrics]".
+_NOISE = re.compile(r"[\[(][^\])]*[\])]|\b(mv|m/v|official|audio|lyrics?|가사|색깔가사|"
+                    r"color coded|한글자막|4k|hd)\b", re.IGNORECASE)
+
+
+def split_title(raw: str) -> tuple[str, str]:
+    """(title, artist) from an upload's name, or ("", "") when it cannot be read.
+
+    Only the "가수 - 제목" shape is accepted. Guessing at anything looser would fill the song
+    table with junk that then gets recommended to people.
+    """
+    cleaned = _NOISE.sub(" ", raw)
+    cleaned = re.sub(r"\.(mp3|wav|m4a|flac|webm)$", " ", cleaned, flags=re.IGNORECASE)
+    parts = re.split(r"\s+[-–—]\s+", cleaned, maxsplit=1)
+    if len(parts) != 2:
+        return "", ""
+    artist = re.sub(r"\s+", " ", parts[0]).strip(" .-_")
+    title = re.sub(r"\s+", " ", parts[1]).strip(" .-_")
+    if not artist or not title or len(artist) > 60 or len(title) > 120:
+        return "", ""
+    return title, artist
+
+
 def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones: float = 1.5,
                      max_semitones: int = 24) -> int:
     """Whole semitones to bring the song into the voice's register, or 0 when it already fits.
@@ -134,6 +160,10 @@ def process_job(
                            None if job.duration_seconds <= 0 else job.duration_seconds)
             stems = separator.separate(trimmed, work / "pre")
 
+            # One pyin pass over the separated vocal serves both the key decision and the song
+            # table; running it twice on a two-minute track is not free.
+            source_stats = analyse(stems.vocals)
+
             pitch_shift = job.pitch_shift
             if pitch_shift == 0 and reference_path and reference_path.is_file():
                 pitch_shift = auto_pitch_shift(stems.vocals, reference_path)
@@ -158,6 +188,12 @@ def process_job(
             backend.upload("covers", result_path, result.output_path)
 
             metrics = result.metrics.to_dict()
+            metrics.update({
+                "source_f0_low": round(source_stats.f0_low, 2) or None,
+                "source_f0_median": round(source_stats.f0_median, 2) or None,
+                "source_f0_high": round(source_stats.f0_high, 2) or None,
+                "pitch_shift": pitch_shift,
+            })
             price = GPU_PRICES_USD_PER_SECOND.get(gpu_type)
             cost = estimate_cost(metrics["total_seconds"], gpu=gpu_type,
                                  usd_per_second=price).usd if price else 0.0
@@ -165,6 +201,14 @@ def process_job(
                 backend.record_metrics(job.cover_id, metrics, gpu_type, cost)
             except BackendError:
                 # Losing a cost row must not lose the user their cover.
+                pass
+
+            try:
+                title, artist = split_title(job.title or "")
+                if artist:
+                    backend.record_song_range(title, artist, source_stats.f0_low,
+                                              source_stats.f0_median, source_stats.f0_high)
+            except (BackendError, Exception):  # noqa: B014 - same reason as the metrics row
                 pass
 
             backend.complete(job, result_path)

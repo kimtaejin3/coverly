@@ -17,6 +17,7 @@ export interface PersonalVoice {
   error_message: string | null;
   training_progress: number;
   training_stage: string | null;
+  f0_median: number | null;
 }
 
 /**

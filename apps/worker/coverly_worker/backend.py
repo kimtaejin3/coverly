@@ -32,6 +32,7 @@ class Job:
     duration_seconds: float
     pitch_shift: int
     cover_type: str
+    title: str = ""
 
 
 @dataclass
@@ -104,7 +105,7 @@ class Backend:
                 "id": f"eq.{job_id}",
                 "select": "id,cover_id,covers(user_id,voice_id,source_type,source_url,"
                           "original_file_url,preview_start_seconds,preview_duration_seconds,"
-                          "pitch_shift,type)",
+                          "pitch_shift,type,title)",
             },
         )
         if not rows:
@@ -123,6 +124,7 @@ class Backend:
             duration_seconds=float(cover["preview_duration_seconds"] or 30),
             pitch_shift=int(cover["pitch_shift"] or 0),
             cover_type=cover["type"],
+            title=cover.get("title") or "",
         )
 
     def job_for_cover(self, cover_id: str) -> Job | None:
@@ -171,7 +173,41 @@ class Backend:
             "mixing_seconds": metrics.get("mixing_seconds"),
             "peak_vram_mb": metrics.get("peak_vram_mb"),
             "estimated_gpu_cost_usd": estimated_cost_usd,
+            "source_f0_low": metrics.get("source_f0_low"),
+            "source_f0_median": metrics.get("source_f0_median"),
+            "source_f0_high": metrics.get("source_f0_high"),
+            "pitch_shift": metrics.get("pitch_shift"),
         })
+
+    def record_song_range(self, title: str, artist: str, low: float, median: float,
+                          high: float) -> None:
+        """Teach song_ranges what this upload actually measured.
+
+        A measured row always beats a seed estimate. Repeated measurements of the same song are
+        averaged rather than overwritten, so one badly cropped upload cannot define a song.
+        """
+        if median <= 0 or not title.strip():
+            return
+        key = {"title": f"eq.{title.strip()[:200]}", "artist": f"eq.{artist.strip()[:100]}"}
+        rows = self._rest("GET", "song_ranges", params={
+            **key, "select": "id,f0_low,f0_median,f0_high,measured_count,source"}) or []
+
+        if not rows:
+            self._rest("POST", "song_ranges", json={
+                "title": title.strip()[:200], "artist": artist.strip()[:100],
+                "f0_low": low, "f0_median": median, "f0_high": high,
+                "source": "measured", "measured_count": 1})
+            return
+
+        row = rows[0]
+        n = row["measured_count"] if row["source"] == "measured" else 0
+        blend = lambda old, new: new if not n else (float(old) * n + new) / (n + 1)  # noqa: E731
+        self._rest("PATCH", "song_ranges", params={"id": f"eq.{row['id']}"}, json={
+            "f0_low": blend(row.get("f0_low") or low, low),
+            "f0_median": blend(row.get("f0_median") or median, median),
+            "f0_high": blend(row.get("f0_high") or high, high),
+            "source": "measured", "measured_count": n + 1,
+            "updated_at": "now()"})
 
     def load_voice(self, voice_id: str) -> VoiceConfig | None:
         rows = self._rest("GET", "voices", params={

@@ -94,7 +94,7 @@ export async function GET() {
 
   const { data } = await supabase
     .from("voices")
-    .select("id, name, status, error_message, training_progress, training_stage")
+    .select("id, name, status, error_message, training_progress, training_stage, f0_median")
     .eq("owner_user_id", user.id)
     .maybeSingle();
 

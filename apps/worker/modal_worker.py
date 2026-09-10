@@ -241,7 +241,10 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
 
         backend._rest("PATCH", "voices", params={"id": f"eq.{voice_id}"},  # noqa: SLF001
                       json={"status": "ready", "model_reference": voice_id, "is_active": True,
-                            "training_progress": 100, "training_stage": None})
+                            "training_progress": 100, "training_stage": None,
+                            "f0_low": round(stats.f0_low, 2),
+                            "f0_median": round(stats.f0_median, 2),
+                            "f0_high": round(stats.f0_high, 2)})
         return {"voice_id": voice_id, "clips": clip_count, "steps": total_steps,
                 "range_semitones": round(stats.span_semitones, 1),
                 "train_seconds": info["train_seconds"]}
