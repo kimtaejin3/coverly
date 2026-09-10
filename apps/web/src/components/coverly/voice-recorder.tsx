@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { PRACTICE_SONGS } from "@/components/coverly/practice-songs";
 import { createClient } from "@/lib/supabase/client";
+import { RangeGauge } from "@/components/coverly/range-gauge";
 import { TARGET_SEMITONES, useVoiceMeter } from "@/components/coverly/use-voice-meter";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
 
   const { meter, start: startMeter, stop: stopMeter, reset: resetMeter } = useVoiceMeter();
   const [span, setSpan] = useState(0);
+  const [reach, setReach] = useState({ low: 0, high: 0 });
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -80,6 +82,7 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
       setPreviewUrl(null);
       setSeconds(0);
       setSpan(0);
+      setReach({ low: 0, high: 0 });
       resetMeter();
       setRecording(true);
       timerRef.current = setInterval(() => {
@@ -143,8 +146,11 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
   }
 
   useEffect(() => {
-    if (recording && meter.semitones > span) setSpan(meter.semitones);
-  }, [recording, meter.semitones, span]);
+    if (recording && meter.semitones > span) {
+      setSpan(meter.semitones);
+      setReach({ low: meter.lowHz, high: meter.highHz });
+    }
+  }, [recording, meter.semitones, span, meter.lowHz, meter.highHz]);
 
   const enough = seconds >= MIN_SECONDS;
   const narrow = span > 0 && span < TARGET_SEMITONES * 0.6;
@@ -218,13 +224,16 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
               style={{ width: `${Math.round(meter.level * 100)}%` }}
             />
           </div>
+          <RangeGauge lowHz={reach.low} highHz={reach.high} currentHz={meter.lowHz > 0 ? meter.highHz : 0} />
           <p className="text-xs text-muted-foreground">
             {meter.level < 0.06
               ? "소리가 작아요. 마이크에 가까이서 불러주세요."
               : span < 1
-                ? "음을 잡는 중…"
-                : `음역 ${span.toFixed(0)}반음 ${
-                    span >= TARGET_SEMITONES ? "· 충분해요" : "· 더 높거나 낮은 키로도 불러주세요"
+                ? "천천히 한 소절 불러보세요."
+                : `${span.toFixed(0)}반음 ${
+                    span >= TARGET_SEMITONES
+                      ? "· 충분해요"
+                      : "· 더 높거나 낮은 키로도 불러주세요"
                   }`}
           </p>
           <Button variant="secondary" className="w-full" onClick={stop}>
@@ -234,6 +243,9 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
         </div>
       ) : previewUrl ? (
         <div className="space-y-2">
+          {reach.high > 0 ? (
+            <RangeGauge lowHz={reach.low} highHz={reach.high} className="pb-1" />
+          ) : null}
           <audio src={previewUrl} controls className="w-full" />
           <div className="grid grid-cols-2 gap-2">
             <Button

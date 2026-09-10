@@ -17,7 +17,7 @@ async function loadPersonalVoice(): Promise<PersonalVoice | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("voices")
-    .select("id, name, status, error_message, training_progress, training_stage, f0_median, f0_high")
+    .select("id, name, status, error_message, training_progress, training_stage, f0_low, f0_median, f0_high")
     // Excluding the catalogue leaves only rows the "owner reads own voices" policy allows,
     // so this can only ever return the caller's own voice.
     .not("owner_user_id", "is", null)

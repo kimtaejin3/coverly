@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowCounterClockwise, CheckCircle, CircleNotch, Warning } from "@phosphor-icons/react";
 
 import { VoiceAvatar } from "@/components/coverly/voice-avatar";
+import { RangeGauge } from "@/components/coverly/range-gauge";
 import { VoiceRecorder } from "@/components/coverly/voice-recorder";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +18,7 @@ export interface PersonalVoice {
   error_message: string | null;
   training_progress: number;
   training_stage: string | null;
+  f0_low: number | null;
   f0_median: number | null;
   f0_high: number | null;
 }
@@ -156,6 +158,16 @@ export function MyVoice({
         <span className="block truncate text-xs text-muted-foreground">내가 녹음한 목소리</span>
       </span>
       </button>
+
+      {/* What the model actually learned, so the owner can see why some songs move further than
+          others. */}
+      {voice.f0_high ? (
+        <RangeGauge
+          lowHz={voice.f0_low ?? 0}
+          highHz={voice.f0_high}
+          className="rounded-lg bg-secondary/40 px-2.5 py-2"
+        />
+      ) : null}
 
       {/* A sibling, never nested: a button inside a button is invalid and the browser reparents
           it, which breaks hydration. */}
