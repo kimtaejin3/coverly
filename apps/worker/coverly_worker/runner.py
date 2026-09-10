@@ -12,7 +12,7 @@ from pathlib import Path
 from .audio import trim
 from .backend import Backend, BackendError, Job
 from .metrics import GPU_PRICES_USD_PER_SECOND, estimate_cost
-from .pipeline import GenerationRequest, run_generation
+from .pipeline import GenerationRequest, run_generation, split_shift
 from .separation import Separator
 from .voice_conversion import VoiceConversionProvider
 
@@ -77,11 +77,15 @@ def _download_youtube(url: str, work_dir: Path) -> Path:
     return produced[0]
 
 
-def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones: float = 3.5) -> int:
-    """Octaves of shift to bring the song into the voice's register, or 0 when it already fits.
+def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones: float = 1.5,
+                     max_semitones: int = 24) -> int:
+    """Whole semitones to bring the song into the voice's register, or 0 when it already fits.
 
-    Only whole octaves: any other interval turns the melody dissonant against an instrumental
-    that was not transposed with it.
+    This used to round to whole octaves, because shifting the vocal alone by anything else leaves
+    it dissonant against an untransposed instrumental. That cost accuracy: a voice at 158 Hz
+    covering a vocal at 429 Hz needs -17 semitones and got -12, leaving five semitones the model
+    never learned. The pipeline now moves the instrumental too, so any interval is available --
+    see `split_shift`.
     """
     try:
         import numpy as np
@@ -98,9 +102,7 @@ def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones
     distance = 12 * float(np.log2(target / source))
     if abs(distance) <= tolerance_semitones:
         return 0
-    # Round to the nearest octave, and never move more than one.
-    octaves = max(-1, min(1, round(distance / 12)))
-    return int(octaves * 12)
+    return int(round(max(-max_semitones, min(max_semitones, distance))))
 
 
 def process_job(

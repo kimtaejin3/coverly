@@ -6,7 +6,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .audio import mix, probe_duration, trim
+from .audio import mix, probe_duration, transpose, trim
 from .device import VramSampler, describe_gpu
 from .metrics import GenerationMetrics, StageTimer
 from .separation import Separator
@@ -48,6 +48,18 @@ def clamp_section(total: float, start: float, duration: float | None) -> tuple[f
     return (min(start, total - duration), duration)
 
 
+def split_shift(semitones: int) -> tuple[int, int]:
+    """Split a shift into what the vocal takes and what the instrumental must follow.
+
+    Octaves are consonant, so the vocal can take those alone and the backing need not move. Only
+    the leftover -6..+6 has to be applied to both to keep the song in key -- which also keeps the
+    instrumental's time-stretching to the smallest interval that does the job, since rubberband
+    audibly smears a whole mix well before an octave.
+    """
+    octaves = round(semitones / 12) * 12
+    return semitones, semitones - octaves
+
+
 def run_generation(request: GenerationRequest, separator: Separator, provider: VoiceConversionProvider,
                    device: str = "cpu", vram_sampler: VramSampler | None = None) -> GenerationResult:
     if not request.input_path.is_file():
@@ -74,7 +86,15 @@ def run_generation(request: GenerationRequest, separator: Separator, provider: V
 
         with timer.stage("mixing"):
             request.output_path.parent.mkdir(parents=True, exist_ok=True)
-            mix(converted, stems.instrumental, request.output_path)
+            # The vocal was converted at the shifted pitch; the instrumental has to follow it by
+            # everything except the octaves, or the two end up in different keys.
+            _, backing_shift = split_shift(request.pitch_shift)
+            instrumental = stems.instrumental
+            if backing_shift:
+                instrumental = transpose(
+                    instrumental, work_dir / "instrumental_shifted.wav", backing_shift
+                )
+            mix(converted, instrumental, request.output_path)
 
         metrics = GenerationMetrics(
             audio_duration_seconds=section_seconds,

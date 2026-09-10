@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -76,52 +77,106 @@ def measure_loudness(path: Path) -> float | None:
 # the backing rather than level with it.
 VOCAL_LEAD_LU = 4.0
 
+# Where the finished mix lands. Without a target the loudness of a cover follows whatever the
+# source happened to be, so two covers in a row jump in level.
+TARGET_LUFS = -14.0
+
+# The converted vocal arrives with no processing at all: vocoder output, dry, and as uneven as the
+# singer was. Raising its average level alone leaves the quiet phrases buried, which is a dynamics
+# problem rather than a gain one.
+VOCAL_SHAPING = (
+    "highpass=f=90,"                          # rumble and vocoder grit below the voice
+    "equalizer=f=260:t=q:w=1.0:g=-2,"         # unmask the instrumental's low mids
+    "equalizer=f=3200:t=q:w=1.4:g=2.5,"       # presence: where consonants live
+    "deesser=i=0.35,"                         # that lift also sharpens sibilance
+    "acompressor=threshold=-20dB:ratio=2.5:attack=8:release=150:makeup=2"
+)
+
+
+def transpose(input_path: Path, output_path: Path, semitones: float) -> Path:
+    """Shift pitch without touching tempo.
+
+    rubberband rather than asetrate: resampling changes the speed with the pitch, which turns a
+    transposed instrumental into a different arrangement.
+    """
+    if abs(semitones) < 0.01:
+        shutil.copyfile(input_path, output_path)
+        return output_path
+    scale = 2.0 ** (semitones / 12.0)
+    _run([_binary("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", "-i", str(input_path),
+          "-af", f"rubberband=pitch={scale:.6f}:pitchq=quality:channels=together",
+          str(output_path)])
+    return output_path
+
 
 def mix(vocals_path: Path, instrumental_path: Path, output_path: Path,
         vocal_gain_db: float | None = None, instrumental_gain_db: float = 0.0,
-        bitrate: str = "192k", reverb: bool = True, vocal_lead_lu: float = VOCAL_LEAD_LU) -> Path:
+        bitrate: str = "192k", reverb: bool = True, vocal_lead_lu: float = VOCAL_LEAD_LU,
+        target_lufs: float | None = TARGET_LUFS, shape_vocal: bool = True) -> Path:
     """Sum converted vocals over the instrumental and encode to MP3.
 
-    The vocal gain is measured, not assumed. Demucs hands back stems at whatever level the source
-    had, and Seed-VC's output level varies with the reference, so any fixed number is wrong for
-    most songs. Both stems are measured in LUFS and the vocal is placed `vocal_lead_lu` above the
-    instrumental; pass `vocal_gain_db` to override.
+    Three passes, because each one needs the result of the last:
+
+    1. Shape the vocal (EQ, de-ess, compression). Doing this first means the loudness measured in
+       step 2 is the loudness that actually reaches the mix.
+    2. Measure both stems and place the vocal `vocal_lead_lu` above the instrumental. Demucs hands
+       back stems at whatever level the source had and Seed-VC's output level follows its
+       reference, so any fixed gain is wrong for most songs.
+    3. Measure the sum and correct it onto `target_lufs` before encoding.
 
     The instrumental keeps the room the original was recorded in while the converted vocal is bone
     dry, so a short stereo reverb, mixed low, puts the voice in the same space. `aecho` is used
     rather than a convolution reverb so no impulse response has to ship with the worker.
-
-    amix with normalize=0 keeps both stems at their own level; a limiter catches the peaks.
-    duration=longest so a slightly shorter converted vocal never truncates the instrumental.
     """
-    if vocal_gain_db is None:
-        vocal_lufs = measure_loudness(vocals_path)
-        instrumental_lufs = measure_loudness(instrumental_path)
-        if vocal_lufs is None or instrumental_lufs is None:
-            # Better to sit slightly forward than to disappear, which is what -3.5 dB did.
-            vocal_gain_db = 1.0
-        else:
-            # Clamped: a mis-measured stem should not blow the mix apart in either direction.
-            delta = max(-12.0, min(18.0,
-                                   instrumental_lufs + vocal_lead_lu - vocal_lufs))
-            # Split the correction between lifting the vocal and ducking the instrumental. Putting
-            # it all on the vocal preserves the same balance but drives the sum into the limiter,
-            # which pumps; sharing it keeps the mix at roughly the level it already had.
-            vocal_gain_db = delta / 2.0
-            instrumental_gain_db -= delta / 2.0
+    with tempfile.TemporaryDirectory(prefix="coverly-mix-") as tmp:
+        work = Path(tmp)
 
-    vocal_chain = f"aresample=44100,aformat=channel_layouts=stereo,volume={vocal_gain_db}dB"
-    if reverb:
-        # Short pre-delays at low gain read as room, not as an echo effect.
-        # Wetter than this and the reverb pushes the voice back behind the instrumental again.
-        vocal_chain += ",aecho=0.9:0.85:38|63|97:0.16|0.11|0.07"
-    filter_graph = (
-        f"[0:a]{vocal_chain}[v];"
-        f"[1:a]aresample=44100,aformat=channel_layouts=stereo,volume={instrumental_gain_db}dB[i];"
-        "[v][i]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false"
-    )
-    cmd = [_binary("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-           "-i", str(vocals_path), "-i", str(instrumental_path),
-           "-filter_complex", filter_graph, "-c:a", "libmp3lame", "-b:a", bitrate, str(output_path)]
-    _run(cmd)
+        shaped = vocals_path
+        if shape_vocal:
+            shaped = work / "vocal_shaped.wav"
+            _run([_binary("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
+                  "-i", str(vocals_path), "-af", VOCAL_SHAPING, str(shaped)])
+
+        if vocal_gain_db is None:
+            vocal_lufs = measure_loudness(shaped)
+            instrumental_lufs = measure_loudness(instrumental_path)
+            if vocal_lufs is None or instrumental_lufs is None:
+                # Better to sit slightly forward than to disappear, which is what -3.5 dB did.
+                vocal_gain_db = 1.0
+            else:
+                # Clamped: a mis-measured stem should not blow the mix apart in either direction.
+                delta = max(-12.0, min(18.0, instrumental_lufs + vocal_lead_lu - vocal_lufs))
+                # Split the correction between lifting the vocal and ducking the instrumental.
+                # Putting it all on the vocal preserves the same balance but drives the sum into
+                # the limiter, which pumps; sharing it keeps the mix near the level it had.
+                vocal_gain_db = delta / 2.0
+                instrumental_gain_db -= delta / 2.0
+
+        vocal_chain = f"aresample=44100,aformat=channel_layouts=stereo,volume={vocal_gain_db}dB"
+        if reverb:
+            # Wetter than this and the reverb pushes the voice back behind the instrumental again.
+            vocal_chain += ",aecho=0.9:0.85:38|63|97:0.16|0.11|0.07"
+        filter_graph = (
+            f"[0:a]{vocal_chain}[v];"
+            f"[1:a]aresample=44100,aformat=channel_layouts=stereo,volume={instrumental_gain_db}dB[i];"
+            "[v][i]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95:level=false"
+        )
+        summed = work / "mix.wav"
+        _run([_binary("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
+              "-i", str(shaped), "-i", str(instrumental_path),
+              "-filter_complex", filter_graph, str(summed)])
+
+        makeup = 0.0
+        if target_lufs is not None:
+            mixed_lufs = measure_loudness(summed)
+            if mixed_lufs is not None:
+                makeup = max(-12.0, min(12.0, target_lufs - mixed_lufs))
+
+        cmd = [_binary("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", "-i", str(summed)]
+        if abs(makeup) > 0.1:
+            cmd += ["-af", f"volume={makeup:.2f}dB,alimiter=limit=0.97:level=false"]
+        cmd += ["-c:a", "libmp3lame", "-b:a", bitrate, str(output_path)]
+        _run(cmd)
     return output_path
+
+

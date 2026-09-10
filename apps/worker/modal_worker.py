@@ -71,6 +71,9 @@ def _build_components(voice, device: str):
         python=Path(sys.executable),
         voices_dir=VOICES_DIR,
         diffusion_steps=50,
+        # Guidance strength. 0.7 is the repo default; leaning on the reference harder is what
+        # makes a fine-tuned voice keep its own colour instead of drifting to the source singer.
+        inference_cfg_rate=0.8,
         device=device,
         checkpoint=checkpoint,
         config=config,
