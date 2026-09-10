@@ -12,11 +12,15 @@ export const PREVIEW: { durationSeconds: number; defaultStartSeconds: number } =
 };
 
 /**
- * Free previews per account. The PRD sets this at 1; it is raised while the product is still
- * being evaluated, so people can compare voices before deciding anything. Lives here rather than
- * in the database so changing it is a deploy, not a migration.
+ * Free previews per account, before any coupon. Two rather than one: a single generation leaves
+ * nothing to compare against, and the first attempt is often the wrong section of a song. The
+ * rest of the allowance arrives through a promo code, so this is the number that decides how much
+ * someone can try before they have a reason to talk to us.
+ *
+ * Lives here rather than in the database so changing it is a deploy, not a migration. A single
+ * account can be raised past it with users.free_generation_limit.
  */
-export const FREE_GENERATIONS_PER_ACCOUNT = 1;
+export const FREE_GENERATIONS_PER_ACCOUNT = 2;
 
 /** What one promo coupon adds. Must match the coupons table's default. */
 export const COUPON_GENERATIONS = 5;
