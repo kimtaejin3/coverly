@@ -43,7 +43,7 @@ image = (
 
 app = modal.App("coverly-worker", image=image)
 models = modal.Volume.from_name("coverly-voice-models", create_if_missing=True)
-secrets = [modal.Secret.from_name("coverly-supabase")]
+secrets = [modal.Secret.from_name("coverly-supabase"), modal.Secret.from_name("coverly-mail")]
 
 VOICES_DIR = Path("/models/_voices")
 
@@ -110,6 +110,21 @@ def process_cover(cover_id: str) -> dict:
     return {"cover_id": cover_id, "result": result_path, "seconds": time.time() - started}
 
 
+def notify_owner(backend, user_id: str | None, *, ready: bool, reason: str = "") -> None:
+    """Tell the owner their voice is done. Twenty minutes is longer than anyone waits on a page."""
+    if not user_id:
+        return
+    try:
+        from coverly_worker.mail import voice_failed_mail, voice_ready_mail
+
+        to = backend.user_email(user_id)
+        if not to:
+            return
+        voice_ready_mail(to) if ready else voice_failed_mail(to, reason)
+    except Exception as exc:  # noqa: BLE001 - never let a notification change the outcome
+        print(f"notify failed: {exc}")
+
+
 @app.function(gpu=GPU, timeout=60 * 60, volumes={"/models": models}, secrets=secrets,
               max_containers=2)
 def train_voice(voice_id: str, steps: int = 0) -> dict:
@@ -139,6 +154,7 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
         "id": f"eq.{voice_id}", "select": "id,training_audio_url,owner_user_id"})
     if not rows or not rows[0].get("training_audio_url"):
         return {"voice_id": voice_id, "skipped": "no training audio"}
+    owner = rows[0].get("owner_user_id")
 
     report("준비 중", 2, status="training", error_message=None)
 
@@ -246,6 +262,7 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
                             "f0_median": round(stats.f0_median, 2),
                             "f0_high": round(stats.f0_high, 2),
                             "f0_peak": round(stats.f0_peak, 2)})
+        notify_owner(backend, owner, ready=True)
         return {"voice_id": voice_id, "clips": clip_count, "steps": total_steps,
                 "range_semitones": round(stats.span_semitones, 1),
                 "train_seconds": info["train_seconds"]}
@@ -253,6 +270,7 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
         backend._rest("PATCH", "voices", params={"id": f"eq.{voice_id}"},  # noqa: SLF001
                       json={"status": "failed", "error_message": str(exc)[:400],
                             "training_progress": 0, "training_stage": None})
+        notify_owner(backend, owner, ready=False, reason=str(exc)[:200])
         # A recording we rejected is an ordinary outcome and its message is already in the row;
         # anything else is a real fault and should surface in the Modal logs.
         if isinstance(exc, ValueError):

@@ -219,6 +219,16 @@ class Backend:
         row = rows[0]
         return VoiceConfig(row["id"], row["name"], row.get("model_reference"), row.get("sample_url"))
 
+    def user_email(self, user_id: str) -> str | None:
+        """The account's email, from the Auth admin API (the service key is already on the client)."""
+        try:
+            response = self._client.get(f"{self.url}/auth/v1/admin/users/{user_id}")
+            if response.status_code >= 400:
+                return None
+            return (response.json() or {}).get("email") or None
+        except Exception:  # noqa: BLE001 - a missing address only means no notification
+            return None
+
     # -- storage --------------------------------------------------------------------------------
     def download(self, bucket: str, path: str, dest: Path) -> Path:
         response = self._client.get(f"{self.url}/storage/v1/object/{bucket}/{path}")
