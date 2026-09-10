@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
   // download and means the section the user auditioned is the one that gets converted.
   const sourcePath = String(form.get("sourcePath") ?? "").trim();
   const voiceId = String(form.get("voiceId") ?? "");
+  const wantsFull = String(form.get("full") ?? "") === "1";
   const startSeconds = Number(form.get("startSeconds") ?? PREVIEW.defaultStartSeconds);
   const title = String(form.get("title") ?? "").slice(0, 120);
 
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await admin
     .from("users")
-    .select("credit_balance, free_generations_used, free_generation_limit, bonus_generations")
+    .select("credit_balance, free_generations_used, free_generation_limit, bonus_generations, can_generate_full")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) {
@@ -71,6 +72,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Free previews first, then credits. Paid full covers come in Phase 5.
+  // Checked against the account, not the request: the flag decides, the form only asks.
+  const full = wantsFull && profile.can_generate_full === true;
   const used = profile.free_generations_used ?? 0;
   // A per-account override exists so one tester can be given more without moving the limit for
   // everyone; null means the app-wide default applies.
@@ -101,9 +104,10 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       voice_id: voiceId,
       title: title || (youtube ? "YouTube 음원" : "내 커버"),
-      preview_start_seconds: Math.max(0, Math.round(startSeconds)),
-      preview_duration_seconds: PREVIEW.durationSeconds,
-      type: "preview",
+      preview_start_seconds: full ? 0 : Math.max(0, Math.round(startSeconds)),
+      // The worker reads a duration of zero as "no trim, take the whole song".
+      preview_duration_seconds: full ? 0 : PREVIEW.durationSeconds,
+      type: full ? "full" : "preview",
       status: "queued",
       source_type: youtube ? "youtube" : "upload",
       source_url: youtube?.url ?? null,

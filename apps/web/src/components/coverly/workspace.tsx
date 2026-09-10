@@ -17,7 +17,7 @@ import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
 import { VoicePicker } from "@/components/coverly/voice-picker";
 import { Button } from "@/components/ui/button";
-import { PREVIEW, YOUTUBE_ENABLED } from "@/lib/config";
+import { PREVIEW, UPLOAD, YOUTUBE_ENABLED } from "@/lib/config";
 import type { RecentCover } from "@/lib/supabase/queries";
 import type { Voice } from "@/lib/types";
 
@@ -40,11 +40,13 @@ export function Workspace({
   signedIn,
   recent,
   personalVoice,
+  canGenerateFull,
 }: {
   voices: Voice[];
   signedIn: boolean;
   recent: RecentCover[];
   personalVoice: PersonalVoice | null;
+  canGenerateFull: boolean;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -53,6 +55,11 @@ export function Workspace({
   const [startSeconds, setStartSeconds] = useState(PREVIEW.defaultStartSeconds);
   // Catalogue voices are not selectable until they ship, so a ?voice=aria link must not
   // pre-select one behind the disabled picker.
+  // The source that produced the last cover, so "전체 곡" can reuse the upload instead of asking
+  // for the file again.
+  const [lastSource, setLastSource] = useState<{ path: string; title: string } | null>(null);
+  // Whether the run in flight is a whole song, so the progress bar is paced for it.
+  const [fullRun, setFullRun] = useState(false);
   const requestedVoice = params.get("voice");
   const [voiceId, setVoiceId] = useState<string | null>(
     requestedVoice && voices.some((v) => v.id === requestedVoice) ? null : requestedVoice,
@@ -147,29 +154,41 @@ export function Workspace({
   // of leaving the person to find it.
   const [outOfQuota, setOutOfQuota] = useState(false);
 
-  async function startGeneration() {
-    if (!hasSource || !voiceId) return;
+  async function startGeneration({ full = false }: { full?: boolean } = {}) {
+    // A full-length run reuses the file the preview already put in storage; only a fresh preview
+    // has to upload anything.
+    if (!voiceId) return;
+    if (!full && !hasSource) return;
+    if (full && !lastSource) return;
     setSubmitting(true);
     try {
-      let sourcePath: string | null = null;
-      if (tab === "file" && song) {
-        sourcePath = await uploadSong(song.file);
-        if (!sourcePath) return;
-      } else if (resolved) {
-        // Already in storage from the preview fetch; nothing to upload.
-        sourcePath = resolved.path;
+      let sourcePath: string | null = full ? lastSource!.path : null;
+      let title = full ? lastSource!.title : "";
+      if (!full) {
+        if (tab === "file" && song) {
+          sourcePath = await uploadSong(song.file);
+          if (!sourcePath) return;
+          title = song.file.name.replace(/\.[^.]+$/, "");
+        } else if (resolved) {
+          // Already in storage from the preview fetch; nothing to upload.
+          sourcePath = resolved.path;
+          title = resolved.canonicalUrl;
+        }
       }
       if (!sourcePath) return;
 
+      const path: string = sourcePath;
       const body = new FormData();
-      body.set("sourcePath", sourcePath);
-      if (tab === "file" && song) {
-        body.set("title", song.file.name.replace(/\.[^.]+$/, ""));
+      body.set("sourcePath", path);
+      if (full || (tab === "file" && song)) {
+        body.set("title", title);
       } else if (resolved) {
         body.set("youtubeUrl", resolved.canonicalUrl);
       }
       body.set("voiceId", voiceId);
       body.set("startSeconds", String(Math.round(startSeconds)));
+      if (full) body.set("full", "1");
+      setLastSource({ path, title });
 
       const response = await fetch("/api/covers", { method: "POST", body });
       const data = await response.json().catch(() => ({}));
@@ -178,6 +197,8 @@ export function Workspace({
         toast.error(data.error ?? "생성을 시작하지 못했어요.");
         return;
       }
+      setFinished(null);
+      setFullRun(full);
       setCoverId(data.coverId);
     } catch {
       toast.error("네트워크 오류로 생성을 시작하지 못했어요.");
@@ -196,7 +217,11 @@ export function Workspace({
         shareUrl: finished.shareUrl,
       }
     : coverId
-      ? { kind: "generating", coverId }
+      ? {
+          kind: "generating",
+          coverId,
+          audioSeconds: fullRun ? UPLOAD.maxDurationSeconds : PREVIEW.durationSeconds,
+        }
       : hasSource && voice
         ? { kind: "ready", voice, fileName: sourceLabel, startSeconds }
         : { kind: "idle" };
@@ -289,7 +314,7 @@ export function Workspace({
                 size="lg"
                 className="h-12 w-full text-base"
                 disabled={Boolean(blocker) || submitting || Boolean(coverId)}
-                onClick={startGeneration}
+                onClick={() => void startGeneration()}
               >
                 {submitting ? (
                   <CircleNotch className="size-4 animate-spin" aria-hidden />
@@ -345,6 +370,9 @@ export function Workspace({
       <div className="min-w-0 lg:border-l lg:border-border/60 lg:pl-10">
         <ResultPane
           state={paneState}
+          canGenerateFull={canGenerateFull}
+          makingFull={submitting}
+          onMakeFull={() => void startGeneration({ full: true })}
           onDone={(audioUrl, shareUrl) => {
             const id = coverId;
             setCoverId(null);

@@ -28,6 +28,8 @@ export interface SessionUser {
   creditBalance: number;
   /** Free previews still available on this account. */
   freeRemaining: number;
+  /** Whole-song generation, rather than the 30 second preview. */
+  canGenerateFull: boolean;
 }
 
 export function UserMenu({ user }: { user: SessionUser }) {

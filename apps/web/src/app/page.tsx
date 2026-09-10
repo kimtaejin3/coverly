@@ -52,6 +52,7 @@ export default async function HomePage() {
             signedIn={Boolean(user)}
             recent={recent}
             personalVoice={personalVoice}
+            canGenerateFull={user?.canGenerateFull ?? false}
           />
         </Suspense>
       </main>

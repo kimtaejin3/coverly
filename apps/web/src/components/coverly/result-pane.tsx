@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Info, MusicNotes, WaveTriangle } from "@phosphor-icons/react";
+import { ArrowRight, CircleNotch, Info, MusicNotes, WaveTriangle } from "@phosphor-icons/react";
 
 import { AiNotice } from "@/components/coverly/ai-notice";
 import { GeneratingPanel } from "@/components/coverly/generating-panel";
@@ -15,7 +15,7 @@ import type { Voice } from "@/lib/types";
 export type PaneState =
   | { kind: "idle" }
   | { kind: "ready"; voice: Voice; fileName: string; startSeconds: number }
-  | { kind: "generating"; coverId: string }
+  | { kind: "generating"; coverId: string; audioSeconds?: number }
   | {
       kind: "done";
       coverId: string;
@@ -32,17 +32,29 @@ export type PaneState =
  */
 export function ResultPane({
   state,
+  canGenerateFull = false,
+  onMakeFull,
+  makingFull = false,
   onDone,
   onFailed,
 }: {
   state: PaneState;
+  /** Whether this account may ask for a whole song rather than the preview. */
+  canGenerateFull?: boolean;
+  onMakeFull?: () => void;
+  makingFull?: boolean;
   onDone: (audioUrl: string | null, shareUrl: string | null) => void;
   onFailed: (message: string) => void;
 }) {
   if (state.kind === "generating") {
     return (
       <div className="mx-auto w-full max-w-lg">
-        <GeneratingPanel coverId={state.coverId} onDone={onDone} onFailed={onFailed} />
+        <GeneratingPanel
+          coverId={state.coverId}
+          audioSeconds={state.audioSeconds}
+          onDone={onDone}
+          onFailed={onFailed}
+        />
       </div>
     );
   }
@@ -64,10 +76,28 @@ export function ResultPane({
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 Voice로 완성할 수 있습니다.
           </p>
-          <Button className="mt-4 h-11 w-full" disabled>
-            전체 곡 만들기 · {formatKrw(PRICING.fullCoverKrw)}
-          </Button>
-          <p className="mt-2 text-center text-xs text-muted-foreground">결제 기능은 준비 중입니다</p>
+          {canGenerateFull ? (
+            <>
+              <Button className="mt-4 h-11 w-full" onClick={onMakeFull} disabled={makingFull}>
+                {makingFull ? (
+                  <CircleNotch className="size-4 animate-spin" aria-hidden />
+                ) : null}
+                {makingFull ? "시작하는 중…" : "전체 곡 만들기"}
+              </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                올린 파일을 그대로 씁니다. 길이에 따라 몇 분 걸려요.
+              </p>
+            </>
+          ) : (
+            <>
+              <Button className="mt-4 h-11 w-full" disabled>
+                전체 곡 만들기 · {formatKrw(PRICING.fullCoverKrw)}
+              </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                결제 기능은 준비 중입니다
+              </p>
+            </>
+          )}
         </div>
 
         <Alert>

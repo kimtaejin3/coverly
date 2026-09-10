@@ -9,8 +9,15 @@ import { GENERATION_STAGES } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 5000;
-/** Only used to animate the bar; the truth is the status the server reports. */
-const EXPECTED_MS = 120_000;
+/**
+ * Only used to animate the bar; the truth is the status the server reports.
+ *
+ * Measured on an L4: 30 seconds of audio takes about 64 seconds end to end, roughly linear in
+ * length. A whole song therefore runs minutes, and a bar tuned for the preview would sit pinned
+ * at 95% for most of it, which reads as a hang.
+ */
+const BASE_MS = 40_000;
+const MS_PER_AUDIO_SECOND = 2_100;
 
 /**
  * Polls `GET /api/covers/:id/status` every five seconds (PRD §38). The worker does not report a
@@ -19,10 +26,13 @@ const EXPECTED_MS = 120_000;
  */
 export function GeneratingPanel({
   coverId,
+  audioSeconds = 30,
   onDone,
   onFailed,
 }: {
   coverId: string;
+  /** Length of the section being converted, so the bar is paced for this job. */
+  audioSeconds?: number;
   onDone: (audioUrl: string | null, shareUrl: string | null) => void;
   onFailed: (message: string) => void;
 }) {
@@ -36,10 +46,11 @@ export function GeneratingPanel({
 
   useEffect(() => {
     const startedAt = Date.now();
+    const expectedMs = BASE_MS + audioSeconds * MS_PER_AUDIO_SECOND;
     let stopped = false;
 
     const bar = setInterval(() => {
-      setProgress(Math.min(95, ((Date.now() - startedAt) / EXPECTED_MS) * 100));
+      setProgress(Math.min(95, ((Date.now() - startedAt) / expectedMs) * 100));
     }, 200);
 
     async function poll() {
