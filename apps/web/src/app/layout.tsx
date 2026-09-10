@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 
+import { ADSENSE_CLIENT, ADSENSE_ENABLED } from "@/lib/adsense";
 import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
@@ -40,6 +42,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="grain flex min-h-full flex-col">
+        {/* afterInteractive: the loader must not compete with the page's own JavaScript, and a
+            blocked or failed ad script must not stop the app from hydrating. */}
+        {ADSENSE_ENABLED ? (
+          <Script
+            id="adsbygoogle"
+            async
+            strategy="afterInteractive"
+            crossOrigin="anonymous"
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+          />
+        ) : null}
         {/* Keyboard users should not have to tab through the whole header on every page. */}
         <a
           href="#main"

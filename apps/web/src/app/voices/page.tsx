@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AiNotice } from "@/components/coverly/ai-notice";
+import { AdSlot } from "@/components/coverly/ad-slot";
 import { SiteFooter } from "@/components/coverly/site-footer";
 import { SiteHeader } from "@/components/coverly/site-header";
 import { VoiceCard } from "@/components/coverly/voice-card";
@@ -58,6 +59,7 @@ export default async function VoicesPage() {
             </section>
           ) : null}
         </div>
+        <AdSlot slot={process.env.NEXT_PUBLIC_ADSENSE_SLOT_VOICES ?? ""} />
       </main>
       <SiteFooter />
     </>
