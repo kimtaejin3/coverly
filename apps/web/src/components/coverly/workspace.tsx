@@ -255,7 +255,7 @@ export function Workspace({
           </Field>
 
           <div className="mb-5">
-            <SongFinder voiceMedian={personalVoice?.f0_median ?? null} />
+            <SongFinder voiceTop={personalVoice?.f0_high ?? null} />
           </div>
 
           <Field step={3} label="Voice 고르기">

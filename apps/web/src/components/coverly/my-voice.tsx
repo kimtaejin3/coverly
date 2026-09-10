@@ -18,6 +18,7 @@ export interface PersonalVoice {
   training_progress: number;
   training_stage: string | null;
   f0_median: number | null;
+  f0_high: number | null;
 }
 
 /**

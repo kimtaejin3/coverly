@@ -18,7 +18,7 @@ const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
  * trained on. So the ranking is by distance from the singer's median, not by whether they can
  * reach the original key.
  */
-export function SongFinder({ voiceMedian }: { voiceMedian: number | null }) {
+export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
   const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
   const [open, setOpen] = useState(false);
@@ -35,15 +35,17 @@ export function SongFinder({ voiceMedian }: { voiceMedian: number | null }) {
   const ranked = useMemo((): { song: SongRange; shift: number | null }[] => {
     if (!songs) return [];
     const filtered = genre === "전체" ? songs : songs.filter((s) => s.genre === genre);
+    // Peaks against peaks: the top note is the figure published for songs and measured for the
+    // singer, and lining the peaks up lines the ranges up.
     const scored = filtered.map((song) => ({
       song,
-      shift: voiceMedian ? semitonesBetween(song.f0_median, voiceMedian) : null,
+      shift: voiceTop && song.f0_high ? semitonesBetween(song.f0_high, voiceTop) : null,
     }));
-    if (!voiceMedian) return scored.slice(0, 12);
+    if (!voiceTop) return scored.slice(0, 12);
     return scored
-      .sort((a, b) => Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0))
+      .sort((a, b) => Math.abs(a.shift ?? 99) - Math.abs(b.shift ?? 99))
       .slice(0, 12);
-  }, [songs, genre, voiceMedian]);
+  }, [songs, genre, voiceTop]);
 
   return (
     <div className="rounded-xl border border-border bg-card/50">
@@ -64,11 +66,11 @@ export function SongFinder({ voiceMedian }: { voiceMedian: number | null }) {
 
       {open ? (
         <div className="space-y-2.5 border-t border-border/60 px-3 py-3">
-          {voiceMedian ? (
+          {voiceTop ? (
             <p className="text-xs text-muted-foreground">
-              내 목소리 중심음{" "}
-              <span className="font-medium text-foreground">{noteName(voiceMedian)}</span> 기준,
-              키를 적게 옮겨도 되는 순서예요.
+              내 최고음{" "}
+              <span className="font-medium text-foreground">{noteName(voiceTop)}</span> 기준, 키를
+              적게 옮겨도 되는 순서예요.
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -107,6 +109,7 @@ export function SongFinder({ voiceMedian }: { voiceMedian: number | null }) {
                     <span className="block truncate text-sm">{song.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {song.artist}
+                      {song.top_note ? ` · 최고음 ${song.top_note}` : ""}
                       {song.source === "seed" ? " · 추정" : ""}
                     </span>
                   </span>
@@ -129,7 +132,8 @@ export function SongFinder({ voiceMedian }: { voiceMedian: number | null }) {
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
             숫자는 옮길 반음 수예요. 어떤 곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가
-            자연스럽습니다. &lsquo;추정&rsquo;은 아직 실제로 측정되지 않은 값이에요.
+            자연스럽습니다. &lsquo;추정&rsquo;은 아직 최고음이 확인되지 않아 장르 평균을 쓴
+            곡이에요 &mdash; 커버가 만들어질 때마다 실제 측정값으로 바뀝니다.
           </p>
         </div>
       ) : null}
