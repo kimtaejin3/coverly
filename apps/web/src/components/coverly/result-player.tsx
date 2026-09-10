@@ -20,9 +20,22 @@ interface ResultPlayerProps {
    * works for the owner, which is the opposite of what the button promises.
    */
   shareUrl?: string;
+  /**
+   * Download and copy-link. Off for someone who arrived by a shared link: the link is meant to let
+   * them listen, and handing them the file and a re-share button is a distribution the owner did
+   * not ask for.
+   */
+  showActions?: boolean;
 }
 
-export function ResultPlayer({ voice, title, durationSeconds, audioUrl, shareUrl }: ResultPlayerProps) {
+export function ResultPlayer({
+  voice,
+  title,
+  durationSeconds,
+  audioUrl,
+  shareUrl,
+  showActions = true,
+}: ResultPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -98,6 +111,7 @@ export function ResultPlayer({ voice, title, durationSeconds, audioUrl, shareUrl
         />
       ) : null}
 
+      {showActions ? (
       <div className="grid gap-2 p-4 sm:grid-cols-2">
         <Button variant="secondary" asChild={Boolean(audioUrl)} disabled={!audioUrl}>
           {audioUrl ? (
@@ -117,6 +131,7 @@ export function ResultPlayer({ voice, title, durationSeconds, audioUrl, shareUrl
           링크 복사
         </Button>
       </div>
+      ) : null}
     </div>
   );
 }

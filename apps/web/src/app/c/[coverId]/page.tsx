@@ -164,6 +164,7 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
               durationSeconds={cover.preview_duration_seconds ?? PREVIEW.durationSeconds}
               audioUrl={audioUrl}
               shareUrl={shareUrl}
+              showActions={isOwner}
             />
           </div>
 
