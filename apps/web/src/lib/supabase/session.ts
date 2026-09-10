@@ -18,7 +18,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("credit_balance, free_generations_used, free_generation_limit")
+    .select("credit_balance, free_generations_used, free_generation_limit, bonus_generations")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -28,7 +28,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     creditBalance: profile?.credit_balance ?? 0,
     freeRemaining: Math.max(
       0,
-      (profile?.free_generation_limit ?? FREE_GENERATIONS_PER_ACCOUNT) -
+      (profile?.free_generation_limit ?? FREE_GENERATIONS_PER_ACCOUNT) +
+        (profile?.bonus_generations ?? 0) -
         (profile?.free_generations_used ?? 0),
     ),
   };

@@ -16,7 +16,10 @@ export const PREVIEW: { durationSeconds: number; defaultStartSeconds: number } =
  * being evaluated, so people can compare voices before deciding anything. Lives here rather than
  * in the database so changing it is a deploy, not a migration.
  */
-export const FREE_GENERATIONS_PER_ACCOUNT = 5;
+export const FREE_GENERATIONS_PER_ACCOUNT = 1;
+
+/** What one promo coupon adds. Must match the coupons table's default. */
+export const COUPON_GENERATIONS = 5;
 
 export const PRICING = {
   fullCoverKrw: 2900,

@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 
 import { ResultPane, type PaneState } from "@/components/coverly/result-pane";
 import { SectionPicker } from "@/components/coverly/section-picker";
+import { CouponForm } from "@/components/coverly/coupon-form";
 import { MyVoice, type PersonalVoice } from "@/components/coverly/my-voice";
 import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-picker";
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
@@ -141,6 +142,10 @@ export function Workspace({
     return info.path as string;
   }
 
+  // Set when the API turns a generation away for quota, so the coupon field opens itself instead
+  // of leaving the person to find it.
+  const [outOfQuota, setOutOfQuota] = useState(false);
+
   async function startGeneration() {
     if (!hasSource || !voiceId) return;
     setSubmitting(true);
@@ -168,6 +173,7 @@ export function Workspace({
       const response = await fetch("/api/covers", { method: "POST", body });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (data.code === "quota_exhausted") setOutOfQuota(true);
         toast.error(data.error ?? "생성을 시작하지 못했어요.");
         return;
       }
@@ -297,6 +303,11 @@ export function Workspace({
             <p className="mt-2 text-center text-xs text-muted-foreground">
               {blocker ?? `${voice?.name} · ${PREVIEW.durationSeconds}초 미리보기 · 무료`}
             </p>
+            {signedIn ? (
+              <div className="mt-2 flex justify-center">
+                <CouponForm defaultOpen={outOfQuota} />
+              </div>
+            ) : null}
           </div>
 
           {recent.length > 0 ? (
