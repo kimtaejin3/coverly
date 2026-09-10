@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /** Redeem a promo code. Collapsed until asked for, so it does not compete with the main flow. */
-export function CouponForm({ defaultOpen = false }: { defaultOpen?: boolean }) {
+export function CouponForm({
+  defaultOpen = false,
+  onDone,
+}: {
+  defaultOpen?: boolean;
+  onDone?: () => void;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,6 +39,7 @@ export function CouponForm({ defaultOpen = false }: { defaultOpen?: boolean }) {
       toast.success(`무료 생성 ${data.granted}회가 추가됐어요.`);
       setCode("");
       setOpen(false);
+      onDone?.();
       // The quota is rendered on the server, so the header and the sidebar need a fresh render.
       router.refresh();
     } catch {

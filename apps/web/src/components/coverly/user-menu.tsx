@@ -1,9 +1,18 @@
 "use client";
 
-import { SignOut } from "@phosphor-icons/react";
+import { useState } from "react";
+import { SignOut, Ticket } from "@phosphor-icons/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { CouponForm } from "@/components/coverly/coupon-form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,8 +32,12 @@ export interface SessionUser {
 
 export function UserMenu({ user }: { user: SessionUser }) {
   const initial = user.email?.charAt(0).toUpperCase() ?? "?";
+  // A dialog rather than a field inside the menu: a dropdown closes the moment you click into an
+  // input, which makes typing a code impossible.
+  const [couponOpen, setCouponOpen] = useState(false);
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="rounded-full" aria-label="내 계정">
@@ -42,6 +55,16 @@ export function UserMenu({ user }: { user: SessionUser }) {
           </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
+            setCouponOpen(true);
+          }}
+        >
+          <Ticket className="size-4" aria-hidden />
+          쿠폰 등록
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <form action="/auth/signout" method="post" className="w-full">
             <button type="submit" className="flex w-full items-center gap-2">
@@ -52,5 +75,18 @@ export function UserMenu({ user }: { user: SessionUser }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    <Dialog open={couponOpen} onOpenChange={setCouponOpen}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>쿠폰 등록</DialogTitle>
+          <DialogDescription>
+            받으신 코드를 입력하면 무료 생성 횟수가 늘어나요.
+          </DialogDescription>
+        </DialogHeader>
+        <CouponForm defaultOpen onDone={() => setCouponOpen(false)} />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
