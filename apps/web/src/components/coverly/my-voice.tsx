@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle, CircleNotch, Warning } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CheckCircle, CircleNotch, Warning } from "@phosphor-icons/react";
 
 import { VoiceAvatar } from "@/components/coverly/voice-avatar";
 import { VoiceRecorder } from "@/components/coverly/voice-recorder";
@@ -35,6 +35,10 @@ export function MyVoice({
   signedIn: boolean;
 }) {
   const [voice, setVoice] = useState<PersonalVoice | null>(initial);
+  // Re-recording overwrites the same row rather than deleting it: covers already made with this
+  // voice reference it, and the foreign key has no ON DELETE, so removing it would take the
+  // owner's history with it.
+  const [redo, setRedo] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const poll = useCallback(async () => {
@@ -42,6 +46,7 @@ export function MyVoice({
       const response = await fetch("/api/voices/train", { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
       setVoice(data.voice ?? null);
+      if (data.voice && data.voice.status !== "ready") setRedo(false);
       // Keep checking only while there is something to wait for.
       if (data.voice && (data.voice.status === "queued" || data.voice.status === "training")) {
         pollRef.current = setTimeout(poll, 10000);
@@ -62,8 +67,21 @@ export function MyVoice({
 
   if (!signedIn) return null;
 
-  if (!voice) {
-    return <VoiceRecorder onTrainingStarted={() => void poll()} />;
+  if (!voice || redo) {
+    return (
+      <div className="space-y-2">
+        <VoiceRecorder onTrainingStarted={() => void poll()} />
+        {redo ? (
+          <button
+            type="button"
+            onClick={() => setRedo(false)}
+            className="w-full text-xs text-muted-foreground underline-offset-4 hover:underline"
+          >
+            그만두고 지금 목소리 쓰기
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   if (voice.status === "queued" || voice.status === "training") {
@@ -102,7 +120,8 @@ export function MyVoice({
 
   const selected = selectedId === voice.id;
   return (
-    <button
+    <div className="space-y-1">
+      <button
       type="button"
       aria-pressed={selected}
       onClick={() =>
@@ -134,6 +153,18 @@ export function MyVoice({
         </span>
         <span className="block truncate text-xs text-muted-foreground">내가 녹음한 목소리</span>
       </span>
-    </button>
+      </button>
+
+      {/* A sibling, never nested: a button inside a button is invalid and the browser reparents
+          it, which breaks hydration. */}
+      <button
+        type="button"
+        onClick={() => setRedo(true)}
+        className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+      >
+        <ArrowCounterClockwise className="size-3.5" aria-hidden />
+        지우고 다시 녹음하기
+      </button>
+    </div>
   );
 }

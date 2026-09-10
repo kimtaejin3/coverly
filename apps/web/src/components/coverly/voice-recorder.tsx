@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { PRACTICE_SONGS } from "@/components/coverly/practice-songs";
 import { createClient } from "@/lib/supabase/client";
 import { TARGET_SEMITONES, useVoiceMeter } from "@/components/coverly/use-voice-meter";
 import { cn } from "@/lib/utils";
@@ -21,28 +22,6 @@ import { cn } from "@/lib/utils";
 const TARGET_SECONDS = 60;
 const MIN_SECONDS = 30;
 
-/**
- * 아리랑, not a nursery rhyme. Two reasons, both measured in Phase 0: the model can only reproduce
- * the range it heard, and 아리랑 spans about an octave where 곰 세 마리 spans a sixth. It is also
- * a traditional song in the public domain, so nothing here depends on a licence.
- */
-const PROMPT = [
-  "아리랑 아리랑 아라리요",
-  "아리랑 고개로 넘어간다",
-  "나를 버리고 가시는 님은",
-  "십리도 못가서 발병난다",
-];
-
-// One verse of 아리랑 runs about 25 seconds, so two keys only just clears the floor. 도라지 타령
-// is there for anyone who runs out before the timer does -- also a traditional song, also about
-// an octave, and nothing hangs on a licence for either.
-const EXTRA = [
-  "도라지 도라지 백도라지",
-  "심심산천에 백도라지",
-  "한두 뿌리만 캐어도",
-  "대바구니로 반실만 되누나",
-];
-
 /** MediaRecorder speaks webm/opus on Chrome and Firefox, mp4/aac on Safari. */
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === "undefined") return undefined;
@@ -57,6 +36,9 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [songId, setSongId] = useState(PRACTICE_SONGS[0].id);
+  const song = PRACTICE_SONGS.find((item) => item.id === songId) ?? PRACTICE_SONGS[0];
 
   const { meter, start: startMeter, stop: stopMeter, reset: resetMeter } = useVoiceMeter();
   const [span, setSpan] = useState(0);
@@ -172,31 +154,45 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
       <div>
         <p className="text-sm font-medium">내 목소리로 만들기</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          아래 아리랑을 <span className="text-foreground">낮은 키로 한 번, 높은 키로 한 번</span>{" "}
-          불러주세요. 길고 음역이 넓을수록 결과가 좋아져요.
+          아래 곡의 <span className="text-foreground">1절만</span>, 한 번은 낮은 키로 한 번은 높은
+          키로 불러주세요. 음역이 넓을수록 결과가 좋아져요.
         </p>
       </div>
 
-      <ol className="space-y-1 rounded-lg bg-secondary/60 px-3 py-2.5">
-        {PROMPT.map((line) => (
-          <li key={line} className="text-sm">
-            {line}
-          </li>
-        ))}
-      </ol>
-
-      <details className="group">
-        <summary className="cursor-pointer list-none text-xs text-muted-foreground underline-offset-4 hover:underline">
-          시간이 남으면 부를 것 (도라지 타령)
-        </summary>
-        <ol className="mt-2 space-y-1 rounded-lg bg-secondary/40 px-3 py-2.5">
-          {EXTRA.map((line) => (
-            <li key={line} className="text-sm">
-              {line}
-            </li>
+      <div className="space-y-2">
+        <label htmlFor="practice-song" className="sr-only">
+          부를 노래
+        </label>
+        <select
+          id="practice-song"
+          value={songId}
+          onChange={(event) => setSongId(event.target.value)}
+          disabled={recording}
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+        >
+          {PRACTICE_SONGS.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.artist === "직접 고르기" ? item.title : `${item.title} — ${item.artist}`}
+            </option>
           ))}
-        </ol>
-      </details>
+        </select>
+
+        <p className="text-xs leading-relaxed text-muted-foreground">{song.hint}</p>
+
+        {song.lyrics ? (
+          <ol className="space-y-1 rounded-lg bg-secondary/60 px-3 py-2.5">
+            {song.lyrics.map((line) => (
+              <li key={line} className="text-sm">
+                {line}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="rounded-lg bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+            가사는 아는 대로 부르시면 돼요. 저작권 때문에 가사를 여기에 싣지는 않습니다.
+          </p>
+        )}
+      </div>
 
       {recording ? (
         <div className="space-y-2">

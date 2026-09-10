@@ -206,7 +206,9 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
             report("마무리 중", 92)
             dest = Path("/models") / voice_id
             dest.mkdir(parents=True, exist_ok=True)
-            (dest / "ft_model.pth").write_bytes(ckpt.read_bytes())
+            staged = dest / "ft_model.pth.new"
+            staged.write_bytes(ckpt.read_bytes())
+            staged.replace(dest / "ft_model.pth")
             (dest / "config.yml").write_bytes(Path(SING_CONFIG).read_bytes())
             info = {"train_seconds": _time.time() - started}
 
