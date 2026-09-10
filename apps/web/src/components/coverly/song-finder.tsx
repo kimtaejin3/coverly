@@ -108,7 +108,7 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
                     <span className="block truncate text-xs text-muted-foreground">
                       {song.artist}
                       {song.top_note ? ` · 최고음 ${song.top_note}` : ""}
-                      {song.source === "seed" ? " · 추정" : ""}
+                      {song.source === "seed" ? " · 음역 미확인" : ""}
                     </span>
                   </span>
                   {shift !== null ? (
@@ -130,8 +130,8 @@ export function SongFinder({ voiceTop }: { voiceTop: number | null }) {
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
             숫자는 옮길 반음 수예요. 어떤 곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가
-            자연스럽습니다. &lsquo;추정&rsquo;은 아직 최고음이 확인되지 않아 장르 평균을 쓴
-            곡이에요 &mdash; 커버가 만들어질 때마다 실제 측정값으로 바뀝니다.
+            자연스럽습니다. &lsquo;음역 미확인&rsquo;은 아직 최고음을 모르는 곡이라 순서에서
+            뒤로 갑니다 &mdash; 누군가 그 곡으로 커버를 만들면 실측이 채워집니다.
           </p>
         </div>
       ) : null}
