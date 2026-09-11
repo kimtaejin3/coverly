@@ -250,10 +250,38 @@ export function VoiceRecorder({
 
   // Step one of two. The scale measures the range; the song teaches the timbre. Asking for both
   // at once produced a take that did neither well.
+  const steps = (
+    <ol className="flex items-center gap-1.5 text-xs">
+      {["음역대 재기", "노래 녹음"].map((label, index) => {
+        const state = !scaleDone ? (index === 0 ? "now" : "next")
+          : index === 0 ? "done" : "now";
+        return (
+          <li key={label} className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "flex size-4 items-center justify-center rounded-full font-mono text-[0.5625rem]",
+                state === "now" && "bg-primary text-primary-foreground",
+                state === "done" && "bg-primary/15 text-primary",
+                state === "next" && "bg-secondary text-muted-foreground",
+              )}
+            >
+              {state === "done" ? "✓" : index + 1}
+            </span>
+            <span className={cn(state === "now" ? "font-medium" : "text-muted-foreground")}>
+              {label}
+            </span>
+            {index === 0 ? <span className="text-muted-foreground/50">›</span> : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+
   if (!scaleDone) {
     return (
-      <>
+      <div className="space-y-3">
         <CreditDialog open={needCredits} onOpenChange={setNeedCredits} />
+        {steps}
         <ScaleTest
           onDone={(result) => {
             setScale(result);
@@ -261,20 +289,18 @@ export function VoiceRecorder({
           }}
           onCancel={() => setScaleDone(true)}
         />
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-dashed border-border bg-card/50 p-4">
+    <div className="space-y-3">
       <CreditDialog open={needCredits} onOpenChange={setNeedCredits} />
-      <div>
-        <p className="text-sm font-medium">{voiceId ? "다시 녹음하기" : "내 목소리로 만들기"}</p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          아래 곡의 <span className="text-foreground">1절만</span>, 한 번은 낮은 키로 한 번은 높은
-          키로 불러주세요. 음역이 넓을수록 결과가 좋아져요.
-        </p>
-      </div>
+      {steps}
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        아래 곡의 <span className="text-foreground">1절만</span>, 한 번은 낮은 키로 한 번은 높은
+        키로 불러주세요. 음역이 넓을수록 결과가 좋아져요.
+      </p>
 
       {scale ? (
         <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/8 px-3 py-2 text-xs">
@@ -440,7 +466,7 @@ export function VoiceRecorder({
       )}
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        학습에 약 20분이 걸려요. 만든 목소리는 나만 보이고 다른 사람에게 공개되지 않습니다. 본인
+        학습에 약 25분이 걸려요. 만든 목소리는 나만 보이고 다른 사람에게 공개되지 않습니다. 본인
         목소리만 녹음해 주세요.
       </p>
     </div>

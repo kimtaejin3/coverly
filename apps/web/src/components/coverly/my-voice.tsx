@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, CheckCircle, CircleNotch, Plus, Warning } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, CheckCircle, CircleNotch, Microphone, Plus, Warning } from "@phosphor-icons/react";
 
 import { RangeGauge } from "@/components/coverly/range-gauge";
 import { VoiceAvatar } from "@/components/coverly/voice-avatar";
 import { VoiceRecorder } from "@/components/coverly/voice-recorder";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { MAX_PERSONAL_VOICES } from "@/lib/config";
@@ -100,32 +101,49 @@ export function MyVoice({
 
   if (!signedIn) return null;
 
-  if (recording !== null) {
-    return (
-      <div className="space-y-2">
+  // The recorder is a task with its own steps, so it gets the screen rather than a slot in a
+  // 340px column. Both entry points -- the first voice and every one after -- open the same one.
+  const recorder = (
+    <ResponsiveModal
+      open={recording !== null}
+      onOpenChange={(next) => !next && setRecording(null)}
+      title={recording && recording !== "new" ? "다시 녹음하기" : "내 목소리 만들기"}
+      description="내 목소리를 한 번 만들어 두면, 올린 노래를 그 목소리로 바꿔 드려요."
+    >
+      {recording !== null ? (
         <VoiceRecorder
           voiceId={recording === "new" ? undefined : recording}
-          onTrainingStarted={() => void poll()}
+          onTrainingStarted={() => {
+            setRecording(null);
+            void poll();
+          }}
         />
-        {voices.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setRecording(null)}
-            className="w-full text-xs text-muted-foreground underline-offset-4 hover:underline"
-          >
-            그만두기
-          </button>
-        ) : null}
-      </div>
-    );
-  }
+      ) : null}
+    </ResponsiveModal>
+  );
 
   if (voices.length === 0) {
-    return <VoiceRecorder onTrainingStarted={() => void poll()} />;
+    return (
+      <>
+        {recorder}
+        <button
+          type="button"
+          onClick={() => setRecording("new")}
+          className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 text-center transition-colors hover:border-primary/50 hover:bg-card"
+        >
+          <Microphone className="size-5 text-primary" weight="fill" aria-hidden />
+          <span className="text-sm font-medium">내 목소리 만들기</span>
+          <span className="text-xs leading-relaxed text-muted-foreground">
+            음역대를 재고 노래 한 곡만 부르면 돼요
+          </span>
+        </button>
+      </>
+    );
   }
 
   return (
     <div className="space-y-1.5">
+      {recorder}
       {voices.map((voice) => (
         <VoiceRow
           key={voice.id}

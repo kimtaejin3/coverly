@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CaretDown, MusicNotes } from "@phosphor-icons/react";
+import { CaretRight, MusicNotes } from "@phosphor-icons/react";
 
 import type { SongRange } from "@/app/api/songs/route";
 import { noteName } from "@/lib/pitch";
 import { classifyFit, TIER_HINT, TIER_ORDER, type Tier } from "@/lib/range";
+import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { cn } from "@/lib/utils";
 
 const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
@@ -40,12 +41,14 @@ export function SongFinder({
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!open || songs) return;
+    // Fetched up front now, not on open: the trigger row shows a count, so the number has to be
+    // there before anyone taps it.
+    if (songs) return;
     fetch("/api/songs")
       .then((r) => r.json())
       .then((d) => setSongs(d.songs ?? []))
       .catch(() => setSongs([]));
-  }, [open, songs]);
+  }, [songs]);
 
   const ranked = useMemo((): Ranked[] => {
     if (!songs) return [];
@@ -72,60 +75,64 @@ export function SongFinder({
   }, [ranked]);
 
   return (
-    <div className="rounded-xl border border-border bg-card/50">
+    <>
+      {/* A row, not an accordion. Expanding a hundred songs inside a 340px column pushed the
+          button that actually makes a cover off the bottom of the screen. */}
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card/50 px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-card"
       >
         <MusicNotes className="size-4 shrink-0 text-primary" aria-hidden />
-        <span className="flex-1 text-sm font-medium">내 음역대 노래 찾기</span>
-        <CaretDown
-          className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-180")}
-          aria-hidden
-        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">내 음역대 노래 찾기</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {modalHigh
+              ? `진성 ${noteName(modalHigh)} 기준${
+                  counts.comfort > 0 ? ` · 편하게 ${counts.comfort}곡` : ""
+                }`
+              : "내 목소리를 만들면 나에게 맞춰 정렬돼요"}
+          </span>
+        </span>
+        <CaretRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       </button>
 
-      {open ? (
-        <div className="space-y-2.5 border-t border-border/60 px-3 py-3">
+      <ResponsiveModal
+        open={open}
+        onOpenChange={setOpen}
+        title="내 음역대 노래 찾기"
+        description={
+          modalHigh
+            ? "노래방에서 부를 때 기준이에요. 숫자만큼 키를 내리면 편해집니다."
+            : "내 목소리를 만들면 나에게 맞는 순서로 정렬돼요."
+        }
+      >
+        <div className="space-y-3 pb-1">
           {modalHigh ? (
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {comfortHigh ? (
-                <>
-                  편한 한계{" "}
-                  <span className="font-medium text-foreground">{noteName(comfortHigh)}</span>
-                  {" · "}진성 최고{" "}
-                  <span className="font-medium text-foreground">{noteName(modalHigh)}</span>
-                  {" 기준이에요. "}
-                  {counts.comfort > 0 ? `편하게 부를 수 있는 곡이 ${counts.comfort}곡` : null}
-                  {counts.comfort > 0 && counts.strain > 0 ? ", " : null}
-                  {counts.strain > 0 ? `힘주면 되는 곡이 ${counts.strain}곡` : null}
-                  {counts.comfort > 0 || counts.strain > 0 ? " 있어요." : null}
-                </>
-              ) : (
-                <>
-                  내가 낸 가장 높은 음{" "}
-                  <span className="font-medium text-foreground">{noteName(modalHigh)}</span> 기준
-                  이에요. 음역대를 재면 편하게 부를 수 있는 곡까지 갈라서 보여드려요.
-                </>
-              )}
+            <p className="rounded-lg bg-primary/8 px-3 py-2 text-xs leading-relaxed">
+              편한 한계{" "}
+              <span className="font-medium">{noteName(comfortHigh ?? modalHigh)}</span>
+              {" · "}진성 최고 <span className="font-medium">{noteName(modalHigh)}</span>
+              {counts.comfort > 0 || counts.strain > 0 ? (
+                <span className="text-muted-foreground">
+                  {" — "}
+                  {counts.comfort > 0 ? `편하게 ${counts.comfort}곡` : ""}
+                  {counts.comfort > 0 && counts.strain > 0 ? ", " : ""}
+                  {counts.strain > 0 ? `힘주면 ${counts.strain}곡` : ""}
+                </span>
+              ) : null}
             </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              내 목소리를 만들면 나에게 맞는 순서로 정렬돼요.
-            </p>
-          )}
+          ) : null}
 
-          <div className="flex flex-wrap gap-1">
+          {/* Sticky so the filter stays reachable after scrolling into the hundreds. */}
+          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-1 bg-popover px-1 pb-1">
             {GENRES.map((g) => (
               <button
                 key={g}
                 type="button"
                 onClick={() => setGenre(g)}
                 className={cn(
-                  "rounded-full px-2.5 py-1 text-xs transition-colors",
+                  "rounded-full px-3 py-1.5 text-xs transition-colors",
                   genre === g
                     ? "bg-primary/15 font-medium text-foreground"
                     : "text-muted-foreground hover:bg-secondary",
@@ -137,13 +144,13 @@ export function SongFinder({
           </div>
 
           {songs === null ? (
-            <p className="py-2 text-xs text-muted-foreground">불러오는 중…</p>
+            <p className="py-6 text-center text-xs text-muted-foreground">불러오는 중…</p>
           ) : (
-            <ul className="scroll-subtle max-h-64 space-y-0.5 overflow-y-auto pr-1">
+            <ul className="space-y-0.5">
               {ranked.map(({ song, tier, shift }) => (
                 <li
                   key={`${song.artist}-${song.title}`}
-                  className="flex items-center gap-2 rounded-lg px-1.5 py-1.5"
+                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 odd:bg-secondary/30"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{song.title}</span>
@@ -154,11 +161,12 @@ export function SongFinder({
                   </span>
                   <span
                     className={cn(
-                      "shrink-0 text-xs whitespace-nowrap",
-                      tier === "comfort" && "font-medium text-primary",
-                      tier === "strain" && "text-amber-600 dark:text-amber-500",
+                      "shrink-0 rounded-md px-2 py-1 text-xs whitespace-nowrap",
+                      tier === "comfort" && "bg-primary/12 font-medium text-primary",
+                      tier === "strain" &&
+                        "bg-amber-500/12 text-amber-700 dark:text-amber-500",
                       tier === "transpose" && "font-mono tabular-nums text-muted-foreground",
-                      tier === "unknown" && "text-muted-foreground/70",
+                      tier === "unknown" && "text-muted-foreground/60",
                     )}
                     title={
                       tier === "strain" && shift
@@ -169,17 +177,10 @@ export function SongFinder({
                     {tier === "comfort"
                       ? "편하게"
                       : tier === "strain"
-                        ? "힘줘야"
+                        ? `힘줘야${shift ? ` ${shift}키` : ""}`
                         : tier === "transpose"
                           ? `${shift}키`
                           : "미확인"}
-                    {/* The key that makes it easy, for the tier where the warning alone would
-                        leave someone stuck with their own throat as the answer. */}
-                    {tier === "strain" && shift ? (
-                      <span className="ml-1 font-mono tabular-nums text-muted-foreground">
-                        {shift}키
-                      </span>
-                    ) : null}
                   </span>
                 </li>
               ))}
@@ -187,21 +188,20 @@ export function SongFinder({
           )}
 
           {falsettoHigh ? (
-            <p className="rounded-lg bg-secondary/50 px-2.5 py-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
+            <p className="rounded-lg bg-secondary/50 px-3 py-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
               가성으로는 <span className="font-medium text-foreground">{noteName(falsettoHigh)}</span>
-              까지 올라가요. 위 순서는 진성 기준이라, 후렴만 가성으로 넘기면 더 높은 곡도
-              부를 수 있습니다.
+              까지 올라가요. 위 순서는 진성 기준이라, 후렴만 가성으로 넘기면 더 높은 곡도 부를 수
+              있습니다.
             </p>
           ) : null}
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-            노래방에서 부를 때 기준이에요. <span className="text-amber-600 dark:text-amber-500">
-            힘줘야</span>는 낼 수는 있지만 후렴에서 무리가 가는 곡이고, 옆의 숫자만큼 키를 내리면
-            편해집니다. AI 커버는 어떤 곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가
-            자연스러워요.
+            <span className="text-amber-600 dark:text-amber-500">힘줘야</span>는 낼 수는 있지만
+            후렴에서 무리가 가는 곡이고, 옆의 숫자만큼 키를 내리면 편해집니다. AI 커버는 어떤
+            곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가 자연스러워요.
           </p>
         </div>
-      ) : null}
-    </div>
+      </ResponsiveModal>
+    </>
   );
 }

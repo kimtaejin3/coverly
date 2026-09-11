@@ -356,25 +356,33 @@ export function ScaleTest({
 
   if (phase === "idle") {
     return (
-      <div className="space-y-3 rounded-xl border border-dashed border-border bg-card/50 p-4">
-        <div>
-          <p className="text-sm font-medium">내 음역대 재기</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            들려주는 음을 <span className="text-foreground">&ldquo;아&rdquo;</span> 하고 따라
-            불러주세요. 한 음씩 올라가고, <span className="text-foreground">소리를 들려줘야</span>{" "}
-            다음으로 넘어가요. 힘들어지는 지점에서 버튼을 눌러주시면 그 위로는 무리해서 부를 곡을
-            추천하지 않습니다.
-          </p>
-        </div>
+      <div className="space-y-4 py-1">
+        <ol className="space-y-2.5">
+          {[
+            ["들려주는 음을 “아” 하고 따라 부르기", "소리를 들려줘야 다음 음으로 넘어가요"],
+            ["조금씩 올라갑니다", "편한 음 하나로 시작해서 거기서부터"],
+            ["힘들어지면 버튼 누르기", "그 위로는 무리해서 부를 곡을 추천하지 않아요"],
+          ].map(([title, hint], index) => (
+            <li key={title} className="flex gap-3">
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/12 font-mono text-[0.625rem] text-primary">
+                {index + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm leading-snug">{title}</span>
+                <span className="block text-xs leading-snug text-muted-foreground">{hint}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
         <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-          이어폰을 끼면 더 정확해요. 편한 음 하나로 시작해서 거기서부터 올라갑니다.
+          이어폰을 끼면 더 정확해요. 재고 나면 부를 수 있는 곡을 진성 기준으로 골라드립니다.
         </p>
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <Button onClick={start}>
+          <Button size="lg" onClick={start}>
             <Microphone className="size-4" weight="fill" aria-hidden />
             음역대 재기 시작
           </Button>
-          <Button variant="ghost" onClick={onCancel}>
+          <Button size="lg" variant="ghost" onClick={onCancel}>
             건너뛰기
           </Button>
         </div>
@@ -384,23 +392,33 @@ export function ScaleTest({
 
   if (phase === "calibrate") {
     return (
-      <div className="space-y-3 rounded-xl border border-primary/40 bg-card/50 p-4">
-        <div className="text-center">
+      <div className="space-y-5 py-4 text-center">
+        <div>
           <p className="text-sm font-medium">편한 음 하나만 내주세요</p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             제일 편한 높이로 &ldquo;아&mdash;&rdquo; 하고 2초쯤. 여기서부터 올라갑니다.
           </p>
         </div>
-        <p className="text-center text-2xl font-bold tracking-tight">
-          {heard > 0 ? noteName(heard) : quiet ? "…" : "듣는 중"}
+        <p
+          className={cn(
+            "text-4xl font-bold tracking-tight tabular-nums transition-colors",
+            heard > 0 ? "text-primary" : "text-muted-foreground/50",
+          )}
+        >
+          {heard > 0 ? noteName(heard) : "…"}
         </p>
         <Progress value={Math.min(100, (calibrationRef.current.length / 12) * 100)} />
-        {quiet ? (
-          <p className="text-center text-xs text-amber-600 dark:text-amber-500">
-            소리가 안 들려요. 마이크에 가까이서 불러주세요.
-          </p>
-        ) : null}
-        <Button variant="ghost" className="w-full" onClick={() => { stopEverything(); onCancel(); }}>
+        <p className="text-xs text-muted-foreground">
+          {quiet ? "소리가 안 들려요. 마이크에 가까이서 불러주세요." : "그대로 유지해 주세요"}
+        </p>
+        <Button
+          variant="ghost"
+          className="w-full"
+          onClick={() => {
+            stopEverything();
+            onCancel();
+          }}
+        >
           그만두기
         </Button>
       </div>
@@ -409,14 +427,16 @@ export function ScaleTest({
 
   if (phase === "saving") {
     return (
-      <div className="rounded-xl border border-primary/40 bg-card/50 p-4">
-        <p className="text-center text-sm text-muted-foreground">음역대를 정리하는 중…</p>
-      </div>
+      <p className="py-10 text-center text-sm text-muted-foreground">음역대를 정리하는 중…</p>
     );
   }
 
+  // How far off, as a position on the needle track. 300 cents each way covers a miss wide enough
+  // to see without the marker slamming into the end and sitting there.
+  const needle = Math.max(-1, Math.min(1, off / 300));
+
   return (
-    <div className="space-y-3 rounded-xl border border-primary/40 bg-card/50 p-4">
+    <div className="space-y-4 py-2">
       <Progress value={((step + 1) / Math.max(1, steps.length)) * 100} />
 
       <div className="text-center">
@@ -425,42 +445,78 @@ export function ScaleTest({
         </p>
         <p
           className={cn(
-            "mt-1 text-2xl font-bold tracking-tight transition-colors",
+            "mt-1 text-5xl font-bold tracking-tight transition-colors",
             phase === "listen" ? "text-primary" : "text-foreground",
           )}
         >
           {noteName(target)}
         </p>
-
-        {phase === "listen" ? (
-          <>
-            {/* Holding the note fills the bar. Six frames at 100ms is 0.6s, comfortably more than
-                the 0.28s the worker needs to call it a held note. */}
-            <div className="mx-auto mt-2 h-1.5 w-32 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-100"
-                style={{ width: `${Math.min(100, (hold / HOLD_FRAMES) * 100)}%` }}
-              />
-            </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {quiet
-                ? "소리가 안 들려요"
-                : heard <= 0
-                  ? "음을 잡는 중…"
-                  : Math.abs(off) <= TOLERANCE_CENTS
-                    ? "좋아요"
-                    : off < 0
-                      ? `조금 낮아요 · 지금 ${noteName(heard)}`
-                      : `조금 높아요 · 지금 ${noteName(heard)}`}
-            </p>
-          </>
-        ) : null}
       </div>
+
+      {phase === "listen" ? (
+        <div className="space-y-3">
+          {/* A needle beats a sentence here. "조금 낮아요" makes someone read and translate; a
+              marker sliding towards the middle is the same information as a direction to move. */}
+          <div className="px-1">
+            <div className="relative h-9">
+              <div className="absolute inset-x-0 top-4 h-1 rounded-full bg-secondary" />
+              {/* The window that counts as a match, drawn so the target is a zone, not a point. */}
+              <div
+                className="absolute top-4 h-1 rounded-full bg-primary/25"
+                style={{
+                  left: `${50 - (TOLERANCE_CENTS / 300) * 50}%`,
+                  width: `${(TOLERANCE_CENTS / 300) * 100}%`,
+                }}
+              />
+              <div className="absolute top-2 left-1/2 h-5 w-px -translate-x-1/2 bg-foreground/30" />
+              {heard > 0 ? (
+                <span
+                  className={cn(
+                    "absolute top-1 size-7 -translate-x-1/2 rounded-full border-2 transition-[left] duration-100",
+                    Math.abs(off) <= TOLERANCE_CENTS
+                      ? "border-primary bg-primary/20"
+                      : "border-muted-foreground/40 bg-background",
+                  )}
+                  style={{ left: `${50 + needle * 50}%` }}
+                />
+              ) : null}
+            </div>
+            <div className="flex justify-between text-[0.625rem] text-muted-foreground">
+              <span>낮음</span>
+              <span>{heard > 0 ? noteName(heard) : "음을 잡는 중…"}</span>
+              <span>높음</span>
+            </div>
+          </div>
+
+          {/* Holding fills the bar. Six frames at 100ms is 0.6s, comfortably past the 0.28s the
+              worker needs to call it a held note. */}
+          <div className="mx-auto h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-100"
+              style={{ width: `${Math.min(100, (hold / HOLD_FRAMES) * 100)}%` }}
+            />
+          </div>
+
+          {quiet ? (
+            <p className="text-center text-xs text-amber-600 dark:text-amber-500">
+              소리가 안 들려요. 마이크에 가까이서 불러주세요.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="h-[4.75rem]" aria-hidden />
+      )}
 
       {falsetto ? (
         <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs leading-relaxed text-muted-foreground">
           지금부터 <span className="font-medium text-foreground">가성</span>으로 들려요. 계속
           올라가도 되지만, 곡 추천은 진성 기준으로 해드립니다.
+        </p>
+      ) : null}
+
+      {struggling ? (
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-center text-xs leading-relaxed text-amber-700 dark:text-amber-500">
+          이 음이 잘 안 나오면 여기가 한계예요. 아래 버튼으로 끝내면 됩니다.
         </p>
       ) : null}
 
@@ -471,18 +527,12 @@ export function ScaleTest({
         </p>
       ) : null}
 
-      {struggling ? (
-        <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs leading-relaxed text-muted-foreground">
-          이 음이 잘 안 나오면 여기가 한계예요. 아래 버튼으로 끝내면 됩니다.
-        </p>
-      ) : null}
-
       <div className="grid gap-2">
-        <Button variant={comfortHz > 0 ? "ghost" : "secondary"} onClick={markComfort}>
+        <Button size="lg" variant={comfortHz > 0 ? "ghost" : "secondary"} onClick={markComfort}>
           <Warning className="size-4" aria-hidden />
           {comfortHz > 0 ? "여기로 다시 표시" : "여기부터 힘들어요"}
         </Button>
-        <Button variant={struggling ? "default" : "ghost"} onClick={finish}>
+        <Button size="lg" variant={struggling ? "default" : "ghost"} onClick={finish}>
           <X className="size-4" aria-hidden />
           더 못 올라가겠어요
         </Button>
