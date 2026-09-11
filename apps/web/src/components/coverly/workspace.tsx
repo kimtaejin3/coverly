@@ -60,7 +60,6 @@ export function Workspace({
   const [lastSource, setLastSource] = useState<{ path: string; title: string } | null>(null);
   // Whether the run in flight is a whole song, so the progress bar is paced for it.
   const [fullRun, setFullRun] = useState(false);
-  const selectedPersonal = personalVoices.find((v) => v.id === voiceId);
   const requestedVoice = params.get("voice");
   const [voiceId, setVoiceId] = useState<string | null>(
     requestedVoice && voices.some((v) => v.id === requestedVoice) ? null : requestedVoice,
@@ -89,6 +88,8 @@ export function Workspace({
         : null;
   const hasSource = Boolean(audio);
   const sourceLabel = tab === "file" ? (song?.file.name ?? "") : "YouTube 음원";
+
+  const selectedPersonal = personalVoices.find((v) => v.id === voiceId);
 
   const voice = useMemo(() => {
     const found = voices.find((v) => v.id === voiceId);
