@@ -110,6 +110,26 @@ def process_cover(cover_id: str) -> dict:
     return {"cover_id": cover_id, "result": result_path, "seconds": time.time() - started}
 
 
+def training_run_ref(voice_id: str, run: int) -> str:
+    """Same derivation the web app uses, so a charge and its refund share one reference."""
+    import hashlib
+    import uuid
+
+    return str(uuid.UUID(hashlib.md5(f"{voice_id}:{run}".encode()).hexdigest()))  # noqa: S324
+
+
+def refund_training(backend, user_id: str | None, voice_id: str, run: int) -> None:
+    """Give the credit back when a paid re-training fails. The first run was free, so run 1 is
+    never refunded -- refunding it would hand out a credit nobody paid for."""
+    if not user_id or run <= 1:
+        return
+    try:
+        backend._rest("POST", "rpc/refund_credit", json={  # noqa: SLF001
+            "p_user_id": user_id, "p_cover_id": training_run_ref(voice_id, run)})
+    except Exception as exc:  # noqa: BLE001 - the failure message matters more than the refund
+        print(f"refund failed: {exc}")
+
+
 def notify_owner(backend, user_id: str | None, *, ready: bool, reason: str = "") -> None:
     """Tell the owner their voice is done. Twenty minutes is longer than anyone waits on a page."""
     if not user_id:
@@ -151,10 +171,11 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
                       json={"training_stage": stage, "training_progress": progress, **extra})
 
     rows = backend._rest("GET", "voices", params={  # noqa: SLF001 - worker-only module
-        "id": f"eq.{voice_id}", "select": "id,training_audio_url,owner_user_id"})
+        "id": f"eq.{voice_id}", "select": "id,training_audio_url,owner_user_id,train_count"})
     if not rows or not rows[0].get("training_audio_url"):
         return {"voice_id": voice_id, "skipped": "no training audio"}
     owner = rows[0].get("owner_user_id")
+    run = int(rows[0].get("train_count") or 1)
 
     report("준비 중", 2, status="training", error_message=None)
 
@@ -270,6 +291,7 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
         backend._rest("PATCH", "voices", params={"id": f"eq.{voice_id}"},  # noqa: SLF001
                       json={"status": "failed", "error_message": str(exc)[:400],
                             "training_progress": 0, "training_stage": None})
+        refund_training(backend, owner, voice_id, run)
         notify_owner(backend, owner, ready=False, reason=str(exc)[:200])
         # A recording we rejected is an ordinary outcome and its message is already in the row;
         # anything else is a real fault and should surface in the Modal logs.

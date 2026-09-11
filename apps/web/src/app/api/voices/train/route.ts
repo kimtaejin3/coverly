@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -5,6 +7,18 @@ import { createClient } from "@/lib/supabase/server";
 
 /** One personal voice per account: training is ~20 GPU-minutes and a 750 MB checkpoint each. */
 const MAX_PERSONAL_VOICES = 1;
+
+/** Deterministic id for one training run, shared by the charge and any later refund. */
+export function trainingRunRef(voiceId: string, run: number): string {
+  const hex = createHash("md5").update(`${voiceId}:${run}`).digest("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join("-");
+}
 
 /**
  * POST /api/voices/train — turns an uploaded recording into a personal voice.
@@ -32,7 +46,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await admin
     .from("voices")
-    .select("id, status")
+    .select("id, status, train_count")
     .eq("owner_user_id", user.id);
 
   // The id is derived from the account, so re-recording overwrites the same row rather than
@@ -52,6 +66,27 @@ export async function POST(request: NextRequest) {
   }
   const label = (typeof name === "string" && name.trim().slice(0, 20)) || "내 목소리";
 
+  // The first training is free; every re-record after that costs a credit. Charged here rather
+  // than in the worker so the person is told before they wait twenty minutes, and refunded by
+  // the worker if the run fails.
+  const priorRuns = existing?.find((row) => row.id === voiceId)?.train_count ?? 0;
+  // credit_transactions keys idempotency off reference_id, and a null reference never matches
+  // itself — a retried refund would pay out twice. A uuid derived from the voice and the run
+  // number gives the charge and its refund the same stable handle on both sides.
+  const runRef = trainingRunRef(voiceId, priorRuns + 1);
+  if (priorRuns > 0) {
+    const { error: spendError } = await admin.rpc("spend_credit", {
+      p_user_id: user.id,
+      p_cover_id: runRef,
+    });
+    if (spendError) {
+      return NextResponse.json(
+        { error: "크레딧이 부족해요. 다시 만들려면 크레딧이 필요합니다.", code: "no_credits" },
+        { status: 402 },
+      );
+    }
+  }
+
   const { error } = await admin.from("voices").upsert({
     id: voiceId,
     name: label,
@@ -64,6 +99,7 @@ export async function POST(request: NextRequest) {
     status: "queued",
     is_active: false,
     sort_order: 0,
+    train_count: priorRuns + 1,
   });
   if (error) {
     return NextResponse.json({ error: "보이스를 만들지 못했습니다." }, { status: 500 });

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { SignOut, Ticket } from "@phosphor-icons/react";
+import { Lightning, SignOut, Ticket } from "@phosphor-icons/react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { CouponForm } from "@/components/coverly/coupon-form";
+import { CreditDialog } from "@/components/coverly/credit-dialog";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +38,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
   // A dialog rather than a field inside the menu: a dropdown closes the moment you click into an
   // input, which makes typing a code impossible.
   const [couponOpen, setCouponOpen] = useState(false);
+  const [creditOpen, setCreditOpen] = useState(false);
 
   return (
     <>
@@ -60,6 +62,15 @@ export function UserMenu({ user }: { user: SessionUser }) {
         <DropdownMenuItem
           onSelect={(event) => {
             event.preventDefault();
+            setCreditOpen(true);
+          }}
+        >
+          <Lightning className="size-4" aria-hidden />
+          크레딧 충전
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault();
             setCouponOpen(true);
           }}
         >
@@ -77,6 +88,8 @@ export function UserMenu({ user }: { user: SessionUser }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    <CreditDialog open={creditOpen} onOpenChange={setCreditOpen} balance={user.creditBalance} />
 
     <Dialog open={couponOpen} onOpenChange={setCouponOpen}>
       <DialogContent className="sm:max-w-sm">
