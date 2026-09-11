@@ -43,7 +43,10 @@ image = (
 
 app = modal.App("coverly-worker", image=image)
 models = modal.Volume.from_name("coverly-voice-models", create_if_missing=True)
-secrets = [modal.Secret.from_name("coverly-supabase"), modal.Secret.from_name("coverly-mail")]
+secrets = [modal.Secret.from_name("coverly-supabase"), modal.Secret.from_name("coverly-mail"),
+           # 커버 품질 노브(COVERLY_DIFFUSION_STEPS, COVERLY_CFG_RATE). 값을 바꾸려면
+           # `modal secret create coverly-tuning ...` 로 다시 만들고 재배포하면 된다.
+           modal.Secret.from_name("coverly-tuning")]
 
 VOICES_DIR = Path("/models/_voices")
 
