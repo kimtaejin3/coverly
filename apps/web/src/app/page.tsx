@@ -11,7 +11,7 @@ import { listRecentCovers, type RecentCover } from "@/lib/supabase/queries";
 import { getSessionUser } from "@/lib/supabase/session";
 
 export const metadata: Metadata = {
-  title: "Coverly — 좋아하는 노래를 새로운 목소리로",
+  title: "Coverly — 좋아하는 노래를 내 목소리로",
 };
 
 async function loadVocalRange(): Promise<VocalRange> {

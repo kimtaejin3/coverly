@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const { data: existing } = await admin
     .from("voices")
-    .select("id, status, train_count")
+    .select("id, name, status, train_count")
     .eq("owner_user_id", user.id)
     .order("created_at");
   const voices = existing ?? [];
@@ -131,7 +131,11 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // 재학습은 있던 목소리를 다시 배우는 것이므로 이름을 건드리지 않는다. 예전엔 여기서
+  // 라벨을 다시 계산해, 두 개 있을 때 첫 번째를 재학습하면 "내 목소리 3" 으로 이름이
+  // 바뀌어 버렸다. 새 목소리만 번호를 붙인다 -- 첫 개는 "내 목소리", 그다음 2, 3...
   const label =
+    retraining?.name ||
     (typeof name === "string" && name.trim().slice(0, 20)) ||
     (voices.length === 0 ? "내 목소리" : `내 목소리 ${voices.length + 1}`);
 

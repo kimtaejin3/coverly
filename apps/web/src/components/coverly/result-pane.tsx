@@ -119,7 +119,7 @@ export function ResultPane({
       >
         <WaveTriangle className="size-7 text-primary" weight="duotone" />
       </div>
-      <h2 className="mt-6 text-2xl font-medium">좋아하는 노래를 새로운 목소리로</h2>
+      <h2 className="mt-6 text-2xl font-medium">좋아하는 노래를 내 목소리로</h2>
       <p className="mt-3 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
         내 목소리를 한 번 만들어 두면, 올린 노래를 그 목소리로 바꿔 드려요. 만든 커버는 본인만
         볼 수 있습니다.

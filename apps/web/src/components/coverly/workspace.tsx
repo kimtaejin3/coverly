@@ -268,7 +268,7 @@ export function Workspace({
             <VocalRangeCard signedIn={signedIn} initial={vocalRange} />
           </div>
 
-          <Field step={3} label="목소리 고르기">
+          <Field step={3} label="내 목소리">
             <MyVoice
               vocalRange={vocalRange}
               initial={personalVoices}

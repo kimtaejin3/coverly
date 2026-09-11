@@ -13,13 +13,13 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3100"),
   title: {
-    default: "Coverly — 좋아하는 노래를 새로운 목소리로",
+    default: "Coverly — 좋아하는 노래를 내 목소리로",
     template: "%s · Coverly",
   },
   description:
     "내 목소리를 만들고, 좋아하는 노래를 그 목소리로 바꿔 보세요. 설치도 설정도 필요 없습니다.",
   openGraph: {
-    title: "Coverly — 좋아하는 노래를 새로운 목소리로",
+    title: "Coverly — 좋아하는 노래를 내 목소리로",
     description: "내 목소리로 부르는 AI 커버를 만들어 보세요.",
     type: "website",
     locale: "ko_KR",
