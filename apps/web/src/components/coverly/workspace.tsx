@@ -12,7 +12,7 @@ import { ResultPane, type PaneState } from "@/components/coverly/result-pane";
 import { SectionPicker } from "@/components/coverly/section-picker";
 import { CouponForm } from "@/components/coverly/coupon-form";
 import { SongFinder } from "@/components/coverly/song-finder";
-import { MyVoice, type PersonalVoice } from "@/components/coverly/my-voice";
+import { MyVoice, asVoice, type PersonalVoice } from "@/components/coverly/my-voice";
 import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-picker";
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
 import { VoicePicker } from "@/components/coverly/voice-picker";
@@ -39,13 +39,13 @@ export function Workspace({
   voices,
   signedIn,
   recent,
-  personalVoice,
+  personalVoices,
   canGenerateFull,
 }: {
   voices: Voice[];
   signedIn: boolean;
   recent: RecentCover[];
-  personalVoice: PersonalVoice | null;
+  personalVoices: PersonalVoice[];
   canGenerateFull: boolean;
 }) {
   const router = useRouter();
@@ -60,6 +60,7 @@ export function Workspace({
   const [lastSource, setLastSource] = useState<{ path: string; title: string } | null>(null);
   // Whether the run in flight is a whole song, so the progress bar is paced for it.
   const [fullRun, setFullRun] = useState(false);
+  const selectedPersonal = personalVoices.find((v) => v.id === voiceId);
   const requestedVoice = params.get("voice");
   const [voiceId, setVoiceId] = useState<string | null>(
     requestedVoice && voices.some((v) => v.id === requestedVoice) ? null : requestedVoice,
@@ -92,26 +93,11 @@ export function Workspace({
   const voice = useMemo(() => {
     const found = voices.find((v) => v.id === voiceId);
     if (found) return found;
-    // The personal voice is deliberately absent from the catalogue; synthesise enough of a Voice
+    // Personal voices are deliberately absent from the catalogue; synthesise enough of a Voice
     // for the summary and result panes to render.
-    if (voiceId && personalVoice?.id === voiceId) {
-      return {
-        id: personalVoice.id,
-        name: personalVoice.name,
-        description: "내가 녹음한 목소리",
-        gender: "female",
-        tags: ["내 목소리"],
-        sampleUrl: "",
-        sampleTitle: "",
-        rangeLabel: "",
-        accent: "",
-        sourceCredit: null,
-        sourceLicense: null,
-        isActive: true,
-      } as Voice;
-    }
-    return null;
-  }, [voices, voiceId, personalVoice]);
+    const mine = personalVoices.find((v) => v.id === voiceId);
+    return mine ? asVoice(mine) : null;
+  }, [voices, voiceId, personalVoices]);
 
   const handleUpload = useCallback((next: UploadedSong | null) => {
     setSong(next);
@@ -280,13 +266,13 @@ export function Workspace({
           </Field>
 
           <div className="mb-5">
-            <SongFinder voicePeak={personalVoice?.f0_peak ?? null} />
+            <SongFinder voicePeak={selectedPersonal?.f0_peak ?? personalVoices[0]?.f0_peak ?? null} />
           </div>
 
           <Field step={3} label="Voice 고르기">
             <div className="space-y-4">
               <MyVoice
-                initial={personalVoice}
+                initial={personalVoices}
                 selectedId={voiceId}
                 onSelect={(next) => setVoiceId(next.id)}
                 signedIn={signedIn}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { PRACTICE_SONGS } from "@/components/coverly/practice-songs";
 import { createClient } from "@/lib/supabase/client";
+import { CreditDialog } from "@/components/coverly/credit-dialog";
 import { RangeGauge } from "@/components/coverly/range-gauge";
 import { TARGET_SEMITONES, useVoiceMeter } from "@/components/coverly/use-voice-meter";
 import { cn } from "@/lib/utils";
@@ -31,12 +32,22 @@ function pickMimeType(): string | undefined {
   );
 }
 
-export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: string) => void }) {
+export function VoiceRecorder({
+  voiceId,
+  onTrainingStarted,
+}: {
+  /** The voice this recording replaces. Omit to add a new one. */
+  voiceId?: string;
+  onTrainingStarted: (id: string) => void;
+}) {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Refused for want of credits — offer the top-up right here rather than sending them hunting
+  // through the account menu with a finished recording in hand.
+  const [needCredits, setNeedCredits] = useState(false);
 
   const [songId, setSongId] = useState(PRACTICE_SONGS[0].id);
   const song = PRACTICE_SONGS.find((item) => item.id === songId) ?? PRACTICE_SONGS[0];
@@ -130,10 +141,11 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
       const response = await fetch("/api/voices/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourcePath: info.path }),
+        body: JSON.stringify({ sourcePath: info.path, ...(voiceId ? { voiceId } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (data.code === "no_credits") setNeedCredits(true);
         toast.error(data.error ?? "학습을 시작하지 못했어요.");
         return;
       }
@@ -157,8 +169,9 @@ export function VoiceRecorder({ onTrainingStarted }: { onTrainingStarted: (id: s
 
   return (
     <div className="space-y-3 rounded-xl border border-dashed border-border bg-card/50 p-4">
+      <CreditDialog open={needCredits} onOpenChange={setNeedCredits} />
       <div>
-        <p className="text-sm font-medium">내 목소리로 만들기</p>
+        <p className="text-sm font-medium">{voiceId ? "다시 녹음하기" : "내 목소리로 만들기"}</p>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
           아래 곡의 <span className="text-foreground">1절만</span>, 한 번은 낮은 키로 한 번은 높은
           키로 불러주세요. 음역이 넓을수록 결과가 좋아져요.

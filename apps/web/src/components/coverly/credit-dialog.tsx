@@ -28,7 +28,7 @@ export function CreditDialog({
 }: {
   open: boolean;
   onOpenChange: (next: boolean) => void;
-  balance: number;
+  balance?: number;
 }) {
   const [packs, setPacks] = useState<Pack[] | null>(null);
   const [enabled, setEnabled] = useState(true);
@@ -72,7 +72,8 @@ export function CreditDialog({
         <DialogHeader>
           <DialogTitle>크레딧 충전</DialogTitle>
           <DialogDescription>
-            크레딧 1개로 내 목소리를 한 번 더 만들 수 있어요. 현재 {balance}개.
+            크레딧 1개로 목소리를 하나 더 만들 수 있어요.
+            {typeof balance === "number" ? ` 현재 ${balance}개.` : ""}
           </DialogDescription>
         </DialogHeader>
 

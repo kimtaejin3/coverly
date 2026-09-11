@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { MAX_PERSONAL_VOICES } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-/** One personal voice per account: training is ~20 GPU-minutes and a 750 MB checkpoint each. */
-const MAX_PERSONAL_VOICES = 1;
+const VOICE_FIELDS =
+  "id, name, status, error_message, training_progress, training_stage, " +
+  "f0_low, f0_median, f0_high, f0_peak, train_count, created_at";
 
 /** Deterministic id for one training run, shared by the charge and any later refund. */
 export function trainingRunRef(voiceId: string, run: number): string {
@@ -21,11 +23,25 @@ export function trainingRunRef(voiceId: string, run: number): string {
 }
 
 /**
+ * Ids for an account's voices.
+ *
+ * The first one is bare, exactly as it was when an account could only have one — renaming it now
+ * would orphan the checkpoint sitting in the Modal volume under that name. Every voice after it
+ * takes a suffix.
+ */
+function voiceIdFor(userId: string, index: number): string {
+  const base = `u-${userId.replace(/-/g, "").slice(0, 12)}`;
+  return index === 0 ? base : `${base}-${index + 1}`;
+}
+
+/**
  * POST /api/voices/train — turns an uploaded recording into a personal voice.
  *
- * The voice is owned by its creator and never enters the catalogue: row level security only
- * exposes it back to them. That is the main guard against someone training a model on a voice
- * that is not theirs (PRD §4).
+ * Send a voiceId to retrain that voice; omit it to add a new one.
+ *
+ * A voice is owned by its creator and never enters the catalogue: row level security only exposes
+ * it back to them. That is the main guard against someone training a model on a voice that is not
+ * theirs (PRD §4).
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -36,56 +52,68 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { sourcePath, name } = await request.json().catch(() => ({}));
+  const { sourcePath, name, voiceId: requestedId } = await request.json().catch(() => ({}));
   if (typeof sourcePath !== "string" || !sourcePath.startsWith(`${user.id}/`)) {
     return NextResponse.json({ error: "녹음을 먼저 올려주세요." }, { status: 400 });
   }
 
   const admin = createAdminClient();
-  const voiceId = `u-${user.id.replace(/-/g, "").slice(0, 12)}`;
-
   const { data: existing } = await admin
     .from("voices")
     .select("id, status, train_count")
-    .eq("owner_user_id", user.id);
+    .eq("owner_user_id", user.id)
+    .order("created_at");
+  const voices = existing ?? [];
 
-  // The id is derived from the account, so re-recording overwrites the same row rather than
-  // adding one. Only a run already on a GPU is worth refusing -- otherwise a failed voice would
-  // be permanently stuck, since its owner could never get past the quota to try again.
-  if ((existing ?? []).some((row) => row.status === "queued" || row.status === "training")) {
+  // A run already on a GPU is the one thing worth refusing. Anything else and a failed voice
+  // would be permanently stuck, since its owner could never get past the check to try again.
+  if (voices.some((row) => row.status === "queued" || row.status === "training")) {
     return NextResponse.json(
       { error: "이미 학습이 진행 중이에요. 끝나면 다시 만들 수 있어요." },
       { status: 409 },
     );
   }
-  if ((existing ?? []).filter((row) => row.id !== voiceId).length >= MAX_PERSONAL_VOICES) {
+
+  // Retraining names a voice we already own; anything else starts a new one.
+  const retraining =
+    typeof requestedId === "string" ? voices.find((row) => row.id === requestedId) : undefined;
+  if (typeof requestedId === "string" && !retraining) {
+    return NextResponse.json({ error: "없는 목소리입니다." }, { status: 404 });
+  }
+
+  if (!retraining && voices.length >= MAX_PERSONAL_VOICES) {
     return NextResponse.json(
       { error: `내 목소리는 계정당 ${MAX_PERSONAL_VOICES}개까지 만들 수 있어요.` },
       { status: 409 },
     );
   }
-  const label = (typeof name === "string" && name.trim().slice(0, 20)) || "내 목소리";
 
-  // The first training is free; every re-record after that costs a credit. Charged here rather
-  // than in the worker so the person is told before they wait twenty minutes, and refunded by
-  // the worker if the run fails.
-  const priorRuns = existing?.find((row) => row.id === voiceId)?.train_count ?? 0;
+  const voiceId = retraining?.id ?? voiceIdFor(user.id, voices.length);
+  const priorRuns = retraining?.train_count ?? 0;
+
+  // One free training run per account, ever. After that every run costs a credit, whether it
+  // makes a new voice or redoes an old one — the GPU does not care which it was.
+  const runsSoFar = voices.reduce((total, row) => total + (row.train_count ?? 0), 0);
   // credit_transactions keys idempotency off reference_id, and a null reference never matches
   // itself — a retried refund would pay out twice. A uuid derived from the voice and the run
   // number gives the charge and its refund the same stable handle on both sides.
   const runRef = trainingRunRef(voiceId, priorRuns + 1);
-  if (priorRuns > 0) {
+  if (runsSoFar > 0) {
     const { error: spendError } = await admin.rpc("spend_credit", {
       p_user_id: user.id,
       p_cover_id: runRef,
     });
     if (spendError) {
       return NextResponse.json(
-        { error: "크레딧이 부족해요. 다시 만들려면 크레딧이 필요합니다.", code: "no_credits" },
+        { error: "크레딧이 부족해요. 목소리를 더 만들려면 크레딧이 필요합니다.", code: "no_credits" },
         { status: 402 },
       );
     }
   }
+
+  const label =
+    (typeof name === "string" && name.trim().slice(0, 20)) ||
+    (voices.length === 0 ? "내 목소리" : `내 목소리 ${voices.length + 1}`);
 
   const { error } = await admin.from("voices").upsert({
     id: voiceId,
@@ -120,19 +148,19 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ voiceId }, { status: 202 });
 }
 
-/** GET — the owner's personal voice and where its training got to. */
+/** GET — every voice this account owns, oldest first. */
 export async function GET() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ voice: null });
+  if (!user) return NextResponse.json({ voices: [] });
 
   const { data } = await supabase
     .from("voices")
-    .select("id, name, status, error_message, training_progress, training_stage, f0_low, f0_median, f0_high, f0_peak")
+    .select(VOICE_FIELDS)
     .eq("owner_user_id", user.id)
-    .maybeSingle();
+    .order("created_at");
 
-  return NextResponse.json({ voice: data ?? null });
+  return NextResponse.json({ voices: data ?? [] });
 }

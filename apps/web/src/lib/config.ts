@@ -22,6 +22,12 @@ export const PREVIEW: { durationSeconds: number; defaultStartSeconds: number } =
  */
 export const FREE_GENERATIONS_PER_ACCOUNT = 2;
 
+/**
+ * Personal voices per account. Each one is ~20 GPU-minutes and a 750 MB checkpoint in the volume,
+ * so the ceiling is about storage rather than fairness; credits pace the rest.
+ */
+export const MAX_PERSONAL_VOICES = 5;
+
 /** What one promo coupon adds. Must match the coupons table's default. */
 export const COUPON_GENERATIONS = 5;
 

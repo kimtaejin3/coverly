@@ -13,16 +13,16 @@ export const metadata: Metadata = {
   title: "Coverly — 좋아하는 노래를 새로운 목소리로",
 };
 
-async function loadPersonalVoice(): Promise<PersonalVoice | null> {
+async function loadPersonalVoices(): Promise<PersonalVoice[]> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("voices")
     .select("id, name, status, error_message, training_progress, training_stage, f0_low, f0_median, f0_high, f0_peak")
     // Excluding the catalogue leaves only rows the "owner reads own voices" policy allows,
-    // so this can only ever return the caller's own voice.
+    // so this can only ever return the caller's own voices.
     .not("owner_user_id", "is", null)
-    .maybeSingle();
-  return (data as PersonalVoice | null) ?? null;
+    .order("created_at");
+  return (data as PersonalVoice[] | null) ?? [];
 }
 
 export default async function HomePage() {
@@ -30,9 +30,9 @@ export default async function HomePage() {
 
   // These two do not depend on each other, and a serial await here costs a full round trip to
   // Supabase before the page can render.
-  const [recent, personalVoice] = user
-    ? await Promise.all([listRecentCovers(6), loadPersonalVoice()])
-    : [[] as RecentCover[], null];
+  const [recent, personalVoices] = user
+    ? await Promise.all([listRecentCovers(6), loadPersonalVoices()])
+    : [[] as RecentCover[], [] as PersonalVoice[]];
 
   return (
     <>
@@ -51,7 +51,7 @@ export default async function HomePage() {
             voices={voices}
             signedIn={Boolean(user)}
             recent={recent}
-            personalVoice={personalVoice}
+            personalVoices={personalVoices}
             canGenerateFull={user?.canGenerateFull ?? false}
           />
         </Suspense>
