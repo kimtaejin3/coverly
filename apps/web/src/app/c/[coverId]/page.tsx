@@ -173,7 +173,7 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
               <div>
                 <h2 className="font-semibold">전체 곡으로 만들기</h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 Voice로 완성할 수
+                  지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 목소리로 완성할 수
                   있습니다.
                 </p>
               </div>
@@ -211,39 +211,6 @@ export default async function CoverPage({ params, searchParams }: PageProps<"/c/
             </AlertDescription>
           </Alert>
 
-          {isOwner ? (
-            <section className="mt-10">
-              <h2 className="font-semibold">다른 Voice로도 만들어보기</h2>
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
-                  준비 중
-                </span>
-                샘플 Voice는 2026년 10월 중 출시 예정이에요.
-              </p>
-              <div className="mt-3 cursor-not-allowed opacity-45" aria-disabled="true">
-                <div className="pointer-events-none grid gap-2" inert>
-                  {others.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-                    >
-                      <VoiceAvatar
-                        voiceId={item.id}
-                        name={item.name}
-                        className="size-10 rounded-xl"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{item.name}</span>
-                        <span className="block truncate text-sm text-muted-foreground">
-                          {item.description}
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : null}
         </div>
       </main>
       <SiteFooter />

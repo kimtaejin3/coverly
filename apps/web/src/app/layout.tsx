@@ -17,10 +17,10 @@ export const metadata: Metadata = {
     template: "%s · Coverly",
   },
   description:
-    "음원을 올리고 Voice를 선택하면 30초 AI 커버를 무료로 만들어 볼 수 있습니다. 설치도 설정도 필요 없습니다.",
+    "내 목소리를 만들고, 좋아하는 노래를 그 목소리로 바꿔 보세요. 설치도 설정도 필요 없습니다.",
   openGraph: {
     title: "Coverly — 좋아하는 노래를 새로운 목소리로",
-    description: "30초 AI 커버를 무료로 만들어 보세요.",
+    description: "내 목소리로 부르는 AI 커버를 만들어 보세요.",
     type: "website",
     locale: "ko_KR",
     siteName: "Coverly",

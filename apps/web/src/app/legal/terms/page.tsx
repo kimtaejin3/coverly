@@ -37,8 +37,9 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-medium text-foreground">Voice</h2>
             <p className="mt-2">
-              Coverly가 제공하는 Voice는 사용 권리를 확보했거나 직접 제작한 목소리입니다. 실존
-              인물의 음성을 무단으로 제공하지 않습니다.
+              Coverly는 이용자 본인이 녹음한 목소리만 학습합니다. 만들어진 목소리는 만든 사람
+              에게만 보이며 다른 이용자에게 제공되지 않습니다. 본인 외의 목소리를 녹음해 학습시키는
+              것은 금지됩니다.
             </p>
           </section>
 

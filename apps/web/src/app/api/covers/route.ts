@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!voiceId) {
-    return NextResponse.json({ error: "Voice를 선택해 주세요." }, { status: 400 });
+    return NextResponse.json({ error: "목소리를 선택해 주세요." }, { status: 400 });
   }
   // A resolved object path is user input like any other: it must sit in the caller's own folder.
   if (sourcePath && !sourcePath.startsWith(`${user.id}/`)) {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   // This runs on the admin client, which bypasses RLS, so ownership is checked here: a personal
   // voice belongs to exactly one account and nobody else may sing with it.
   if (!voice || (voice.owner_user_id !== null && voice.owner_user_id !== user.id)) {
-    return NextResponse.json({ error: "사용할 수 없는 Voice입니다." }, { status: 400 });
+    return NextResponse.json({ error: "사용할 수 없는 목소리입니다." }, { status: 400 });
   }
 
   const { data: profile } = await admin

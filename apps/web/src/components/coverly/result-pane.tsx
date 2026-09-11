@@ -74,7 +74,7 @@ export function ResultPane({
         <div className="rounded-2xl bg-primary/8 p-5">
           <h2 className="font-medium">전체 곡으로 만들기</h2>
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-            지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 Voice로 완성할 수 있습니다.
+            지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 목소리로 완성할 수 있습니다.
           </p>
           {canGenerateFull ? (
             <>
@@ -159,13 +159,13 @@ export function ResultPane({
       </div>
       <h2 className="mt-6 text-2xl font-medium">좋아하는 노래를 새로운 목소리로</h2>
       <p className="mt-3 max-w-[38ch] text-sm leading-relaxed text-muted-foreground">
-        왼쪽에서 음원을 올리고 Voice를 고르면 {PREVIEW.durationSeconds}초 커버를 무료로 만들어
-        드려요. 만든 커버는 본인만 볼 수 있습니다.
+        내 목소리를 한 번 만들어 두면, 올린 노래를 그 목소리로 바꿔 드려요. 만든 커버는 본인만
+        볼 수 있습니다.
       </p>
       <ol className="mt-8 w-full space-y-3 text-left">
         {[
           "가지고 있는 음원을 올립니다",
-          "샘플을 듣고 Voice를 고릅니다",
+          "내 목소리를 만듭니다",
           "완성된 커버를 듣고 내려받습니다",
         ].map((label, index) => (
           <li key={label} className="flex items-center gap-3 rounded-xl bg-card/60 px-4 py-3">

@@ -15,7 +15,6 @@ import { SongFinder } from "@/components/coverly/song-finder";
 import { MyVoice, asVoice, type PersonalVoice } from "@/components/coverly/my-voice";
 import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-picker";
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
-import { VoicePicker } from "@/components/coverly/voice-picker";
 import { Button } from "@/components/ui/button";
 import { PREVIEW, UPLOAD, YOUTUBE_ENABLED } from "@/lib/config";
 import type { RecentCover } from "@/lib/supabase/queries";
@@ -36,13 +35,11 @@ function Field({ step, label, children }: { step: number; label: string; childre
 }
 
 export function Workspace({
-  voices,
   signedIn,
   recent,
   personalVoices,
   canGenerateFull,
 }: {
-  voices: Voice[];
   signedIn: boolean;
   recent: RecentCover[];
   personalVoices: PersonalVoice[];
@@ -60,9 +57,11 @@ export function Workspace({
   const [lastSource, setLastSource] = useState<{ path: string; title: string } | null>(null);
   // Whether the run in flight is a whole song, so the progress bar is paced for it.
   const [fullRun, setFullRun] = useState(false);
+  // Only the owner's own voices exist now, so a ?voice= link means something only when it names
+  // one of them.
   const requestedVoice = params.get("voice");
   const [voiceId, setVoiceId] = useState<string | null>(
-    requestedVoice && voices.some((v) => v.id === requestedVoice) ? null : requestedVoice,
+    requestedVoice && personalVoices.some((v) => v.id === requestedVoice) ? requestedVoice : null,
   );
   const [coverId, setCoverId] = useState<string | null>(null);
   const [finished, setFinished] = useState<{
@@ -91,14 +90,12 @@ export function Workspace({
 
   const selectedPersonal = personalVoices.find((v) => v.id === voiceId);
 
-  const voice = useMemo(() => {
-    const found = voices.find((v) => v.id === voiceId);
-    if (found) return found;
-    // Personal voices are deliberately absent from the catalogue; synthesise enough of a Voice
-    // for the summary and result panes to render.
-    const mine = personalVoices.find((v) => v.id === voiceId);
-    return mine ? asVoice(mine) : null;
-  }, [voices, voiceId, personalVoices]);
+  // Personal voices are not catalogue rows; give the summary and result panes the shape they
+  // expect.
+  const voice = useMemo(
+    () => (selectedPersonal ? asVoice(selectedPersonal) : null),
+    [selectedPersonal],
+  );
 
   const handleUpload = useCallback((next: UploadedSong | null) => {
     setSong(next);
@@ -198,7 +195,7 @@ export function Workspace({
     ? {
         kind: "done",
         coverId: finished.id,
-        voice: voice ?? voices[0],
+        voice: voice!,
         title: finished.title,
         audioUrl: finished.audioUrl,
         shareUrl: finished.shareUrl,
@@ -218,7 +215,7 @@ export function Workspace({
       ? "노래를 올려주세요"
       : "YouTube 음원을 가져와 주세요"
     : !voiceId
-      ? "Voice를 골라주세요"
+      ? "내 목소리를 먼저 만들어주세요"
       : null;
 
   return (
@@ -270,29 +267,13 @@ export function Workspace({
             <SongFinder voicePeak={selectedPersonal?.f0_peak ?? personalVoices[0]?.f0_peak ?? null} />
           </div>
 
-          <Field step={3} label="Voice 고르기">
-            <div className="space-y-4">
-              <MyVoice
-                initial={personalVoices}
-                selectedId={voiceId}
-                onSelect={(next) => setVoiceId(next.id)}
-                signedIn={signedIn}
-              />
-
-              <div>
-                <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="rounded bg-secondary px-1.5 py-0.5 font-medium text-foreground">
-                    준비 중
-                  </span>
-                  샘플 Voice는 2026년 10월 중 출시 예정이에요.
-                </p>
-                <div className="cursor-not-allowed opacity-45" aria-disabled="true">
-                  <div className="pointer-events-none" inert>
-                    <VoicePicker voices={voices} selectedId={null} onSelect={() => {}} />
-                  </div>
-                </div>
-              </div>
-            </div>
+          <Field step={3} label="목소리 고르기">
+            <MyVoice
+              initial={personalVoices}
+              selectedId={voiceId}
+              onSelect={(next) => setVoiceId(next.id)}
+              signedIn={signedIn}
+            />
           </Field>
 
           <div className="sticky bottom-0 -mx-1 bg-background/95 px-1 pt-3 pb-1 backdrop-blur-sm">

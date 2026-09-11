@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/coverly/site-header";
 import { Workspace } from "@/components/coverly/workspace";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/lib/supabase/server";
-import { listRecentCovers, listVoices, type RecentCover } from "@/lib/supabase/queries";
+import { listRecentCovers, type RecentCover } from "@/lib/supabase/queries";
 import { getSessionUser } from "@/lib/supabase/session";
 
 export const metadata: Metadata = {
@@ -26,7 +26,7 @@ async function loadPersonalVoices(): Promise<PersonalVoice[]> {
 }
 
 export default async function HomePage() {
-  const [voices, user] = await Promise.all([listVoices(), getSessionUser()]);
+  const user = await getSessionUser();
 
   // These two do not depend on each other, and a serial await here costs a full round trip to
   // Supabase before the page can render.
@@ -48,7 +48,6 @@ export default async function HomePage() {
           }
         >
           <Workspace
-            voices={voices}
             signedIn={Boolean(user)}
             recent={recent}
             personalVoices={personalVoices}

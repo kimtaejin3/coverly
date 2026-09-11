@@ -9,9 +9,6 @@ export function SiteFooter() {
           결과물을 외부에 공유하거나 배포할 때 발생하는 권리 문제의 책임도 이용자에게 있습니다.
         </p>
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-          <Link href="/voices" className="transition-colors hover:text-foreground">
-            Voice
-          </Link>
           <Link href="/create" className="transition-colors hover:text-foreground">
             커버 만들기
           </Link>

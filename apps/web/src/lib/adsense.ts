@@ -27,7 +27,7 @@ export const ADSENSE_ENABLED = ADSENSE_CLIENT.startsWith("ca-pub-");
  * excluded here. What is left earns close to nothing. Widening this is the decision that carries
  * the risk described above, and it is yours to make rather than mine.
  */
-export const AD_ROUTES = ["/voices", "/legal/terms", "/legal/privacy"] as const;
+export const AD_ROUTES = ["/legal/terms", "/legal/privacy"] as const;
 
 export function adsAllowedOn(pathname: string): boolean {
   return ADSENSE_ENABLED && AD_ROUTES.some((route) => pathname === route);
