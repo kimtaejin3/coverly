@@ -74,6 +74,15 @@ const STRUGGLE_MS = 6000;
  */
 const FALSETTO_JUMP_DB = 8;
 /**
+ * Frames a register flip must persist before it counts.
+ *
+ * H1-H2 is noisy frame to frame, and right at the passaggio it sits on the threshold. Without
+ * this the "가성으로 들려요" notice strobes on and off, and the modal-top measurement flips with
+ * it. Three frames (~0.3s) is long enough that only a real change of register survives -- the same
+ * kind of hold that steadies the pitch and level readouts.
+ */
+const FALSETTO_CONFIRM_FRAMES = 3;
+/**
  * How long a reading survives a dropout before the display gives up on it.
  *
  * The detector runs ten times a second and returns 0 whenever a frame is unvoiced -- between
@@ -169,6 +178,11 @@ export function ScaleTest({
   const baselineRef = useRef<number[]>([]);
   const modalTopRef = useRef(0);
   const falsettoRef = useRef(false);
+  // Consecutive frames the raw flip has disagreed with the committed state.
+  const falsettoStreakRef = useRef(0);
+  // Bumped every time a tone starts. A sound() whose epoch is stale bails instead of running its
+  // tail -- the guard against a replay tapped mid-tone leaving two playback timelines racing.
+  const soundEpochRef = useRef(0);
 
   const stopEverything = useCallback(() => {
     doneRef.current = true;
@@ -281,16 +295,21 @@ export function ScaleTest({
   const sound = useCallback(
     async (hz: number) => {
       if (doneRef.current) return;
+      // Any earlier sound() -- the auto-play, or a previous tap -- is now stale and must not run
+      // its tail. Same-note guards were not enough: replay plays the same hz, so it could not tell
+      // the two apart. An epoch can.
+      const epoch = (soundEpochRef.current += 1);
+      const superseded = () => doneRef.current || soundEpochRef.current !== epoch;
       const recorder = recorderRef.current;
       setPhaseBoth("tone");
       // Pausing while the tone sounds is what keeps it out of the file. Filtering a reference tone
       // back out afterwards is guesswork; not recording it is not.
       if (recorder?.state === "recording") recorder.pause();
       await playTone(hz);
-      if (doneRef.current || targetRef.current !== hz) return;
+      if (superseded()) return;
       // Let the release die before the microphone opens.
       await new Promise((r) => setTimeout(r, TONE_GAP_MS));
-      if (doneRef.current || targetRef.current !== hz) return;
+      if (superseded()) return;
       if (recorderRef.current?.state === "paused") recorderRef.current.resume();
       setPhaseBoth("listen");
       timerRef.current = setTimeout(() => setStruggling(true), STRUGGLE_MS);
@@ -366,9 +385,14 @@ export function ScaleTest({
       if (baseline.length >= 2) {
         const sorted = [...baseline].sort((a, b) => a - b);
         const chest = sorted[Math.floor(sorted.length / 2)];
-        const flipped = h1h2Ref.current - chest > FALSETTO_JUMP_DB;
-        falsettoRef.current = flipped;
-        setFalsetto(flipped);
+        const rawFlip = h1h2Ref.current - chest > FALSETTO_JUMP_DB;
+        if (rawFlip === falsettoRef.current) {
+          falsettoStreakRef.current = 0;
+        } else if ((falsettoStreakRef.current += 1) >= FALSETTO_CONFIRM_FRAMES) {
+          falsettoRef.current = rawFlip;
+          falsettoStreakRef.current = 0;
+          setFalsetto(rawFlip);
+        }
       }
     }
 
