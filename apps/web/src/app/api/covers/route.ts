@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
   if (used >= limit) {
     return NextResponse.json(
       {
-        error: "무료 생성을 모두 사용했어요. 쿠폰이 있으면 등록해 주세요.",
+        error: `커버는 계정당 ${limit}회까지 만들 수 있어요. 쿠폰이 있으면 등록해 주세요.`,
         code: "quota_exhausted",
       },
       { status: 402 },

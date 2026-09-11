@@ -12,15 +12,20 @@ export const PREVIEW: { durationSeconds: number; defaultStartSeconds: number } =
 };
 
 /**
- * Free previews per account, before any coupon. Two rather than one: a single generation leaves
- * nothing to compare against, and the first attempt is often the wrong section of a song. The
- * rest of the allowance arrives through a promo code, so this is the number that decides how much
- * someone can try before they have a reason to talk to us.
+ * Covers per account.
+ *
+ * Generous on purpose. Credits buy voices, never covers -- charging for a cover would mean taking
+ * money for separating a commercial master server-side, which is the thing 저작권법 제102조
+ * withholds its safe harbour from. So a low cover limit is a dead end rather than a funnel: there
+ * is nothing a user can do about it except ask for a coupon.
+ *
+ * Thirty is roughly 750원 of GPU per account -- enough to use the product properly, small enough
+ * that a script cannot run up a bill. The paid product is the voice; covers are how you use it.
  *
  * Lives here rather than in the database so changing it is a deploy, not a migration. A single
  * account can be raised past it with users.free_generation_limit.
  */
-export const FREE_GENERATIONS_PER_ACCOUNT = 2;
+export const FREE_GENERATIONS_PER_ACCOUNT = 30;
 
 /**
  * Personal voices per account. Each one is ~20 GPU-minutes and a 750 MB checkpoint in the volume,

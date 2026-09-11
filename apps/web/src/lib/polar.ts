@@ -10,24 +10,25 @@
  * 저작권법 제102조 withholds its safe harbour from.
  */
 
-/** "<product uuid>:<credits>:<price in cents>,…" — one env var so packs change without a deploy. */
+/** "<product uuid>:<credits>:<price>,…" — price in the currency's own unit (원, not 전). */
 const RAW_PRODUCTS = process.env.POLAR_PRODUCTS ?? "";
 
 export interface CreditPack {
   productId: string;
   credits: number;
-  priceCents: number;
+  /** Whole won. KRW has no minor unit, so this is what Polar charges, not a hundredth of it. */
+  price: number;
 }
 
 export const CREDIT_PACKS: CreditPack[] = RAW_PRODUCTS.split(",")
   .map((entry) => entry.trim())
   .filter(Boolean)
   .map((entry) => {
-    const [productId, credits, priceCents] = entry.split(":");
+    const [productId, credits, price] = entry.split(":");
     return {
       productId: (productId ?? "").trim(),
       credits: Number(credits),
-      priceCents: Number(priceCents),
+      price: Number(price),
     };
   })
   .filter((pack) => pack.productId && pack.credits > 0);

@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 interface Pack {
   productId: string;
   credits: number;
-  priceCents: number;
+  price: number;
 }
 
 /** Buy credits. Renders nothing until the server says checkout is actually configured. */
@@ -72,7 +72,7 @@ export function CreditDialog({
         <DialogHeader>
           <DialogTitle>크레딧 충전</DialogTitle>
           <DialogDescription>
-            크레딧 1개로 목소리를 하나 더 만들 수 있어요.
+            크레딧은 내 목소리를 만들 때만 써요. 커버 만들기는 크레딧 없이 됩니다.
             {typeof balance === "number" ? ` 현재 ${balance}개.` : ""}
           </DialogDescription>
         </DialogHeader>
@@ -97,7 +97,7 @@ export function CreditDialog({
                 <Lightning className="size-4 shrink-0 text-primary" weight="fill" aria-hidden />
                 <span className="flex-1 text-sm font-medium">크레딧 {pack.credits}개</span>
                 <span className="font-mono text-sm tabular-nums">
-                  ${(pack.priceCents / 100).toFixed(2)}
+                  {pack.price.toLocaleString("ko-KR")}원
                 </span>
                 {busy === pack.productId ? (
                   <CircleNotch className="size-4 animate-spin" aria-hidden />
@@ -105,7 +105,7 @@ export function CreditDialog({
               </button>
             ))}
             <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-              결제는 Polar에서 진행되며 USD로 청구됩니다. 영수증과 환불도 Polar가 처리합니다.
+              결제는 Polar에서 진행됩니다. 영수증과 환불도 Polar가 처리합니다.
             </p>
           </div>
         )}

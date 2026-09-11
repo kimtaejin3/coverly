@@ -7,10 +7,10 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET() {
   return NextResponse.json({
     enabled: POLAR_ENABLED,
-    packs: CREDIT_PACKS.map(({ productId, credits, priceCents }) => ({
+    packs: CREDIT_PACKS.map(({ productId, credits, price }) => ({
       productId,
       credits,
-      priceCents,
+      price,
     })),
   });
 }

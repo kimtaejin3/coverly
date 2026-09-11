@@ -308,7 +308,7 @@ export function Workspace({
                 ) : (
                   <Sparkle className="size-4" weight="fill" aria-hidden />
                 )}
-                {submitting ? "음원 올리는 중…" : "무료로 생성하기"}
+                {submitting ? "음원 올리는 중…" : "커버 만들기"}
               </Button>
             ) : (
               <Button asChild size="lg" className="h-12 w-full text-base">
@@ -318,7 +318,7 @@ export function Workspace({
               </Button>
             )}
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              {blocker ?? `${voice?.name} · ${PREVIEW.durationSeconds}초 미리보기 · 무료`}
+              {blocker ?? `${voice?.name} · ${PREVIEW.durationSeconds}초 미리보기`}
             </p>
             {signedIn ? (
               <div className="mt-2 flex justify-center">

@@ -55,7 +55,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
         <DropdownMenuLabel className="font-normal">
           <p className="truncate text-sm font-medium">{user.email ?? "로그인됨"}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            무료 {user.freeRemaining}회 남음 · 크레딧 {user.creditBalance}개
+            커버 {user.freeRemaining}회 남음 · 크레딧 {user.creditBalance}개
           </p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

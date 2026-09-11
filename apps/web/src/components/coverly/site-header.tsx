@@ -29,7 +29,7 @@ export async function SiteHeader() {
           {user ? (
             <>
               <span className="tabular hidden px-2 font-mono text-xs text-muted-foreground sm:inline">
-                {user.freeRemaining > 0 ? `무료 ${user.freeRemaining}회` : `크레딧 ${user.creditBalance}`}
+                {user.freeRemaining > 0 ? `커버 ${user.freeRemaining}회` : `크레딧 ${user.creditBalance}개`}
               </span>
               <UserMenu user={user} />
             </>
