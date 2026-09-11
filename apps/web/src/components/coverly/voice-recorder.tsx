@@ -49,21 +49,25 @@ function pickMimeType(): string | undefined {
 export function VoiceRecorder({
   voiceId,
   knownRange,
+  defaultName = "내 목소리",
   onTrainingStarted,
 }: {
   /** The voice this recording replaces. Omit to add a new one. */
   voiceId?: string;
   /** Already measured, from the person rather than this voice. Skips step one. */
   knownRange?: { modalHigh: number | null } | null;
+  /** What the name box starts with for a new voice -- the number the server would give it. */
+  defaultName?: string;
   onTrainingStarted: (id: string) => void;
 }) {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  // Only for a new voice -- retraining keeps the name it already has. Empty means "let the server
-  // pick", which numbers it (내 목소리, 내 목소리 2 …). The point is the person naming it by use.
-  const [voiceName, setVoiceName] = useState("");
+  // Prefilled with the default the server would use, so the box is never empty and the person can
+  // just overwrite it with a purpose ("발라드용"). Retraining keeps its own name, so this is only
+  // shown when adding a new voice.
+  const [voiceName, setVoiceName] = useState(defaultName);
   const [submitting, setSubmitting] = useState(false);
   // Refused for want of credits — offer the top-up right here rather than sending them hunting
   // through the account menu with a finished recording in hand.
@@ -444,7 +448,7 @@ export function VoiceRecorder({
           {!voiceId ? (
             <div className="space-y-1">
               <label htmlFor="voice-name" className="text-xs text-muted-foreground">
-                이 목소리 이름 <span className="text-muted-foreground/60">(선택)</span>
+                이 목소리 이름 <span className="text-muted-foreground/60">· 용도로 지으면 나중에 고르기 쉬워요</span>
               </label>
               <input
                 id="voice-name"

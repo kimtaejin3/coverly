@@ -117,6 +117,9 @@ export function MyVoice({
         <VoiceRecorder
           voiceId={recording === "new" ? undefined : recording}
           knownRange={vocalRange}
+          // Prefill the name box the way the server would number it, so the field shows a real
+          // default ("내 목소리", "내 목소리 2" …) instead of an empty box the user has to guess at.
+          defaultName={voices.length === 0 ? "내 목소리" : `내 목소리 ${voices.length + 1}`}
           onTrainingStarted={() => {
             setRecording(null);
             void poll();
