@@ -25,7 +25,10 @@ export async function GET() {
   const { data, error } = await supabase
     .from("song_ranges")
     .select("title, artist, genre, f0_low, f0_median, f0_high, f0_peak, top_note, source")
-    .order("f0_median");
+    // By top note, easiest first. f0_median was the old axis and it is barely populated -- it was
+    // a seed's bucket guess where it existed at all, and 최고음 is what this list is about.
+    // Unknown tops sort last: a song we cannot place should not lead the list.
+    .order("f0_peak", { ascending: true, nullsFirst: false });
 
   if (error) {
     return NextResponse.json({ songs: [] }, { status: 200 });
