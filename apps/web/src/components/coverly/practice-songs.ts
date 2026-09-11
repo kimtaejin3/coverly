@@ -6,8 +6,10 @@
  * not protected, so a copyrighted song appears here as a suggestion to sing from memory and only
  * the traditional songs — public domain — carry their words.
  *
- * The ordering is deliberate: the model can only reproduce the range it heard, so songs whose
- * chorus climbs well above the verse are listed first.
+ * The default ordering is deliberate: the model can only reproduce the range it heard, so songs
+ * whose chorus climbs well above the verse are listed first. Once a scale take has measured the
+ * singer the list is re-sorted around them instead — a take sung in a key they cannot hold is
+ * worse than no take, because the strain becomes a permanent property of the voice model.
  */
 export interface PracticeSong {
   id: string;
@@ -17,6 +19,14 @@ export interface PracticeSong {
   hint: string;
   /** Present only where the work is in the public domain. */
   lyrics?: string[];
+  /**
+   * Kept out of the range ranking, and why.
+   *
+   * "first" is the pick-your-own escape hatch, which is not a song and should not be ranked among
+   * them. "last" is the traditional songs: they are the fallback for when the words will not come,
+   * not a recommendation, and they sit in one narrow octave anyway.
+   */
+  pin?: "first" | "last";
 }
 
 export const PRACTICE_SONGS: PracticeSong[] = [
@@ -25,6 +35,7 @@ export const PRACTICE_SONGS: PracticeSong[] = [
     title: "아는 발라드 아무거나",
     artist: "직접 고르기",
     hint: "가장 잘 아는 곡의 1절이 제일 잘 나와요. 후렴이 높은 곡일수록 좋습니다.",
+    pin: "first",
   },
   {
     id: "sung-두사람",
@@ -73,6 +84,7 @@ export const PRACTICE_SONGS: PracticeSong[] = [
     title: "아리랑",
     artist: "민요 · 가사 있음",
     hint: "가사가 기억 안 날 때. 옥타브 정도 쓰고, 두 키로 부르면 시간이 찹니다.",
+    pin: "last",
     lyrics: [
       "아리랑 아리랑 아라리요",
       "아리랑 고개로 넘어간다",
@@ -85,6 +97,7 @@ export const PRACTICE_SONGS: PracticeSong[] = [
     title: "도라지 타령",
     artist: "민요 · 가사 있음",
     hint: "아리랑으로 시간이 모자랄 때 이어서 부르세요.",
+    pin: "last",
     lyrics: [
       "도라지 도라지 백도라지",
       "심심산천에 백도라지",

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CaretDown, MusicNotes } from "@phosphor-icons/react";
 
 import type { SongRange } from "@/app/api/songs/route";
-import { noteName, semitonesBetween } from "@/lib/pitch";
+import { noteName } from "@/lib/pitch";
+import { classifyFit, TIER_HINT, TIER_ORDER, type Tier } from "@/lib/range";
 import { cn } from "@/lib/utils";
 
 const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
@@ -12,32 +13,15 @@ const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
 /**
  * Which songs this voice can actually sing, and how.
  *
- * The question was never "does it fit" — the cover pipeline transposes anything into range. It is
+ * The question was never "does it fit" -- the cover pipeline transposes anything into range. It is
  * what a singer standing in a 노래방 needs: can I hold this, or do I have to squeeze for the
- * chorus, or should I just drop the key.
- *
- * Answering that takes two ceilings, not one. Against a single number the middle case disappears,
- * and the middle case is most of the interesting songs: 공허해 came back as two semitones away,
- * which was true of the average note and wrong about the ones that matter.
+ * chorus, or should I just drop the key. The three-way answer lives in `lib/range`, shared with
+ * the practice-song picker so the two never disagree.
  */
-type Tier = "comfort" | "strain" | "transpose" | "unknown";
-
-const TIER_ORDER: Record<Tier, number> = { comfort: 0, strain: 1, transpose: 2, unknown: 3 };
-
 interface Ranked {
   song: SongRange;
   tier: Tier;
-  /** Semitones to drop before it sits in the comfortable range. Only set for `transpose`. */
   shift: number | null;
-}
-
-function classify(song: SongRange, comfortHigh: number | null, absoluteHigh: number | null): Ranked {
-  if (!song.f0_peak || !absoluteHigh) return { song, tier: "unknown", shift: null };
-  if (comfortHigh && song.f0_peak <= comfortHigh) return { song, tier: "comfort", shift: null };
-  if (song.f0_peak <= absoluteHigh) return { song, tier: "strain", shift: null };
-  // Target the comfortable ceiling, not the absolute one: a key you can only just reach is not a
-  // key you want to be handed in front of other people.
-  return { song, tier: "transpose", shift: semitonesBetween(song.f0_peak, comfortHigh || absoluteHigh) };
 }
 
 export function SongFinder({
@@ -62,7 +46,10 @@ export function SongFinder({
   const ranked = useMemo((): Ranked[] => {
     if (!songs) return [];
     const filtered = genre === "전체" ? songs : songs.filter((s) => s.genre === genre);
-    const scored = filtered.map((song) => classify(song, comfortHigh, absoluteHigh));
+    const scored = filtered.map((song) => ({
+      song,
+      ...classifyFit(song.f0_peak, comfortHigh, absoluteHigh),
+    }));
     if (!absoluteHigh) return scored;
     return [...scored].sort(
       (a, b) =>
@@ -169,15 +156,7 @@ export function SongFinder({
                       tier === "transpose" && "font-mono tabular-nums text-muted-foreground",
                       tier === "unknown" && "text-muted-foreground/70",
                     )}
-                    title={
-                      tier === "comfort"
-                        ? "편한 음역 안에 들어와요"
-                        : tier === "strain"
-                          ? "낼 수는 있지만 고음에서 힘을 써야 해요"
-                          : tier === "transpose"
-                            ? "이만큼 키를 내리면 편하게 불러요"
-                            : "아직 최고음을 모르는 곡이에요"
-                    }
+                    title={TIER_HINT[tier]}
                   >
                     {tier === "comfort"
                       ? "편하게"

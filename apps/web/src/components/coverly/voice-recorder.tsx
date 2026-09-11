@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleNotch, Microphone, Stop, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -9,6 +9,8 @@ import { Progress } from "@/components/ui/progress";
 import { PRACTICE_SONGS } from "@/components/coverly/practice-songs";
 import { createClient } from "@/lib/supabase/client";
 import { noteName } from "@/lib/pitch";
+import { classifyFit, songKey, TIER_ORDER, type Tier } from "@/lib/range";
+import type { SongRange } from "@/app/api/songs/route";
 import { CreditDialog } from "@/components/coverly/credit-dialog";
 import { RangeGauge } from "@/components/coverly/range-gauge";
 import { ScaleTest, type ScaleResult } from "@/components/coverly/scale-test";
@@ -28,6 +30,14 @@ import { cn } from "@/lib/utils";
  */
 const TARGET_SECONDS = 60;
 const MIN_SECONDS = 30;
+
+/** Short enough to sit inside a <select> option without pushing the title off a phone screen. */
+function fitLabel(tier: Tier, shift: number | null): string {
+  if (tier === "comfort") return "편하게";
+  if (tier === "strain") return "고음 힘줘야";
+  if (tier === "transpose") return `${Math.round(shift ?? 0)}키`;
+  return "음역 미확인";
+}
 
 /** MediaRecorder speaks webm/opus on Chrome and Firefox, mp4/aac on Safari. */
 function pickMimeType(): string | undefined {
@@ -61,6 +71,49 @@ export function VoiceRecorder({
   const [scaleDone, setScaleDone] = useState(false);
 
   const [songId, setSongId] = useState(PRACTICE_SONGS[0].id);
+  // Only auto-pick until they touch the control. Re-sorting under someone's cursor is rude, and
+  // a measured range arriving late should not silently change what they already chose.
+  const [picked, setPicked] = useState(false);
+  const [ranges, setRanges] = useState<SongRange[] | null>(null);
+
+  useEffect(() => {
+    // Same cached endpoint the song finder uses, so this is usually free.
+    fetch("/api/songs")
+      .then((r) => r.json())
+      .then((d) => setRanges(d.songs ?? []))
+      .catch(() => setRanges([]));
+  }, []);
+
+  const comfortHigh = scale?.comfortHz || null;
+  const absoluteHigh = scale?.topHz || null;
+
+  /** Practice songs ordered around this singer, once there is a measurement to order them by. */
+  const ranked = useMemo(() => {
+    const peaks = new Map<string, number | null>(
+      (ranges ?? []).map((row) => [songKey(row.title, row.artist), row.f0_peak]),
+    );
+    const scored = PRACTICE_SONGS.map((item) => ({
+      song: item,
+      ...classifyFit(peaks.get(songKey(item.title, item.artist)) ?? null, comfortHigh, absoluteHigh),
+    }));
+    if (!absoluteHigh) return scored;
+    const group = (pin?: "first" | "last") => (pin === "first" ? -1 : pin === "last" ? 1 : 0);
+    return [...scored].sort(
+      (a, b) =>
+        group(a.song.pin) - group(b.song.pin) ||
+        TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
+        Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
+    );
+  }, [ranges, comfortHigh, absoluteHigh]);
+
+  // The best fit is the useful default once we know the range. Before that, the hand-ordered list
+  // stands and its first entry is the pick-your-own option.
+  useEffect(() => {
+    if (picked || !absoluteHigh) return;
+    const best = ranked.find((item) => item.song.pin !== "first" && item.tier !== "unknown");
+    if (best) setSongId(best.song.id);
+  }, [ranked, picked, absoluteHigh]);
+
   const song = PRACTICE_SONGS.find((item) => item.id === songId) ?? PRACTICE_SONGS[0];
 
   const { meter, start: startMeter, stop: stopMeter, reset: resetMeter } = useVoiceMeter();
@@ -260,13 +313,17 @@ export function VoiceRecorder({
         <select
           id="practice-song"
           value={songId}
-          onChange={(event) => setSongId(event.target.value)}
+          onChange={(event) => {
+            setPicked(true);
+            setSongId(event.target.value);
+          }}
           disabled={recording}
           className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
         >
-          {PRACTICE_SONGS.map((item) => (
+          {ranked.map(({ song: item, tier, shift }) => (
             <option key={item.id} value={item.id}>
               {item.artist === "직접 고르기" ? item.title : `${item.title} — ${item.artist}`}
+              {absoluteHigh && !item.pin ? ` · ${fitLabel(tier, shift)}` : ""}
             </option>
           ))}
         </select>
