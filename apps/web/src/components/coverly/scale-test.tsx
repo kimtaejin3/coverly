@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle, Microphone, Warning, X } from "@phosphor-icons/react";
+import { CheckCircle, Microphone, SpeakerHigh, Warning, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,20 @@ const STEP_SEMITONES = 2;
 const CEILING_HZ = noteHz("솔", 3);
 const MAX_STEPS = 14;
 
-const TONE_MS = 900;
+/**
+ * The reference tone.
+ *
+ * 900ms with a 30ms attack was a blip, and a blip is not a pitch anyone can carry into their
+ * throat. This is long enough to hear, settle on, and take a breath before. The gap after it lets
+ * the release tail die out before the microphone opens, so the tail is not read as the singer's
+ * first note.
+ */
+const TONE_MS = 1600;
+const TONE_ATTACK_S = 0.08;
+const TONE_RELEASE_S = 0.25;
+const TONE_GAP_MS = 350;
+/** Scheduled a little ahead of `currentTime`, or the audio thread can find the start already past. */
+const TONE_LOOKAHEAD_S = 0.06;
 /** Frames of a matching pitch before the step counts. The worker needs 0.28s of held note. */
 const HOLD_FRAMES = 6;
 const FRAME_MS = 100;
@@ -169,22 +182,67 @@ export function ScaleTest({
 
   useEffect(() => () => stopEverything(), [stopEverything]);
 
-  /** A triangle wave, not a sine: on a laptop speaker a 200 Hz sine is close to inaudible. */
-  const playTone = useCallback((hz: number) => {
+  const toneNodesRef = useRef<{ oscs: OscillatorNode[]; gain: GainNode } | null>(null);
+
+  /**
+   * Sound the target and resolve when it has finished.
+   *
+   * A sine plus a soft second and third harmonic, not a triangle. A triangle's odd harmonics are
+   * what made it buzz; a bare sine is what makes 200 Hz vanish on a laptop speaker. Two quiet
+   * partials give it enough body to carry without the edge.
+   *
+   * Any tone still sounding is stopped first, so a fast retry cannot stack two of them into a
+   * beating mess -- which is exactly what "unstable" sounds like.
+   */
+  const playTone = useCallback(async (hz: number): Promise<void> => {
     const context = contextRef.current;
     if (!context) return;
-    const osc = context.createOscillator();
+    // Browsers start a context suspended until a gesture lands, and some suspend it again on a
+    // tab switch. A suspended context takes the schedule and plays nothing, late, or half of it.
+    if (context.state !== "running") {
+      await context.resume().catch(() => {});
+    }
+    if (toneNodesRef.current) {
+      const { oscs, gain } = toneNodesRef.current;
+      const t = context.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(gain.gain.value, t);
+      gain.gain.linearRampToValueAtTime(0, t + 0.03);
+      for (const osc of oscs) osc.stop(t + 0.04);
+      toneNodesRef.current = null;
+    }
+
+    const start = context.currentTime + TONE_LOOKAHEAD_S;
+    const length = TONE_MS / 1000;
     const gain = context.createGain();
-    osc.type = "triangle";
-    osc.frequency.value = hz;
-    const now = context.currentTime;
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.22, now + 0.03);
-    gain.gain.setValueAtTime(0.22, now + TONE_MS / 1000 - 0.06);
-    gain.gain.linearRampToValueAtTime(0, now + TONE_MS / 1000);
-    osc.connect(gain).connect(context.destination);
-    osc.start(now);
-    osc.stop(now + TONE_MS / 1000 + 0.02);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.28, start + TONE_ATTACK_S);
+    gain.gain.setValueAtTime(0.28, start + length - TONE_RELEASE_S);
+    gain.gain.linearRampToValueAtTime(0, start + length);
+    gain.connect(context.destination);
+
+    const oscs = ([1, 2, 3] as const).map((harmonic) => {
+      const osc = context.createOscillator();
+      const partial = context.createGain();
+      osc.type = "sine";
+      osc.frequency.value = hz * harmonic;
+      partial.gain.value = harmonic === 1 ? 1 : harmonic === 2 ? 0.35 : 0.12;
+      osc.connect(partial).connect(gain);
+      osc.start(start);
+      osc.stop(start + length + 0.02);
+      return osc;
+    });
+    toneNodesRef.current = { oscs, gain };
+
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        if (toneNodesRef.current?.oscs === oscs) toneNodesRef.current = null;
+        resolve();
+      };
+      oscs[0].onended = done;
+      // Belt and braces: onended does not fire if the context is closed mid-tone.
+      setTimeout(done, (TONE_LOOKAHEAD_S + length) * 1000 + 100);
+    });
   }, []);
 
   const setPhaseBoth = useCallback((next: Phase) => {
@@ -216,6 +274,30 @@ export function ScaleTest({
     recorder.stop();
   }, [onDone, setPhaseBoth]);
 
+  /**
+   * Play the target and hand over to listening. Also what "다시 듣기" calls: a missed tone used to
+   * leave someone guessing at a note they never properly heard.
+   */
+  const sound = useCallback(
+    async (hz: number) => {
+      if (doneRef.current) return;
+      const recorder = recorderRef.current;
+      setPhaseBoth("tone");
+      // Pausing while the tone sounds is what keeps it out of the file. Filtering a reference tone
+      // back out afterwards is guesswork; not recording it is not.
+      if (recorder?.state === "recording") recorder.pause();
+      await playTone(hz);
+      if (doneRef.current || targetRef.current !== hz) return;
+      // Let the release die before the microphone opens.
+      await new Promise((r) => setTimeout(r, TONE_GAP_MS));
+      if (doneRef.current || targetRef.current !== hz) return;
+      if (recorderRef.current?.state === "paused") recorderRef.current.resume();
+      setPhaseBoth("listen");
+      timerRef.current = setTimeout(() => setStruggling(true), STRUGGLE_MS);
+    },
+    [playTone, setPhaseBoth],
+  );
+
   /** Sound the next target with the recorder paused, then open it and wait to hear the note. */
   const ask = useCallback(
     (index: number) => {
@@ -225,6 +307,10 @@ export function ScaleTest({
         finish();
         return;
       }
+      // A struggle timer from the previous step could still be pending; never let it fire into
+      // this one.
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
       stepRef.current = index;
       targetRef.current = list[index];
       holdRef.current = 0;
@@ -235,20 +321,9 @@ export function ScaleTest({
       setHeard(0);
       setQuiet(false);
       setStruggling(false);
-      setPhaseBoth("tone");
-      const recorder = recorderRef.current;
-      // Pausing while the tone sounds is what keeps it out of the file. Filtering a reference tone
-      // back out afterwards is guesswork; not recording it is not.
-      if (recorder?.state === "recording") recorder.pause();
-      playTone(list[index]);
-      timerRef.current = setTimeout(() => {
-        if (doneRef.current) return;
-        if (recorderRef.current?.state === "paused") recorderRef.current.resume();
-        setPhaseBoth("listen");
-        timerRef.current = setTimeout(() => setStruggling(true), STRUGGLE_MS);
-      }, TONE_MS);
+      void sound(list[index]);
     },
-    [finish, playTone, setPhaseBoth],
+    [finish, sound],
   );
 
   /** Runs at 10 Hz for the whole session; what it does depends on the phase. */
@@ -256,6 +331,9 @@ export function ScaleTest({
     const analyser = analyserRef.current;
     const context = contextRef.current;
     if (!analyser || !context || doneRef.current) return;
+    // The speaker is feeding the microphone right now. Reading pitch off that and painting it on
+    // the screen is what made the display jump around during the tone.
+    if (phaseRef.current === "tone") return;
     const buffer = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(buffer);
 
@@ -363,6 +441,9 @@ export function ScaleTest({
       recorderRef.current = recorder;
 
       const context = new AudioContext();
+      // We are inside a click handler, so this is allowed and it is the one moment it is certain
+      // to be allowed. Every later resume is a fallback.
+      await context.resume().catch(() => {});
       const analyser = context.createAnalyser();
       analyser.fftSize = 2048;
       context.createMediaStreamSource(stream).connect(analyser);
@@ -379,6 +460,16 @@ export function ScaleTest({
     } catch {
       toast.error("마이크를 사용할 수 없어요. 브라우저 권한을 확인해 주세요.");
     }
+  }
+
+  function replay() {
+    if (phaseRef.current !== "listen") return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    holdRef.current = 0;
+    setHold(0);
+    setStruggling(false);
+    void sound(targetRef.current);
   }
 
   function markComfort() {
@@ -489,6 +580,19 @@ export function ScaleTest({
         </p>
       </div>
 
+      {/* While the tone sounds, a bar fills for its length -- so "listen" has a visible end and
+          nobody starts singing over the reference. Keyed on step so it restarts each note. */}
+      <div className="h-1 overflow-hidden rounded-full bg-secondary" aria-hidden>
+        <div
+          key={`${step}-${phase === "tone" ? "t" : "l"}`}
+          className={cn(
+            "h-full rounded-full bg-foreground/30",
+            phase === "tone" ? "animate-tone-fill" : "w-0",
+          )}
+          style={phase === "tone" ? { animationDuration: `${TONE_MS}ms` } : undefined}
+        />
+      </div>
+
       {/* Always mounted, dimmed while the tone plays. Swapping this block in and out every
           couple of seconds was most of the flicker -- the eye reads a control appearing as
           something new to deal with, even when it is the same control it saw a moment ago. */}
@@ -568,6 +672,15 @@ export function ScaleTest({
       </div>
 
       <div className="grid gap-2">
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={replay}
+          disabled={phase !== "listen"}
+        >
+          <SpeakerHigh className="size-4" aria-hidden />
+          다시 듣기
+        </Button>
         <Button size="lg" variant={comfortHz > 0 ? "ghost" : "secondary"} onClick={markComfort}>
           <Warning className="size-4" aria-hidden />
           {comfortHz > 0 ? "여기로 다시 표시" : "여기부터 힘들어요"}

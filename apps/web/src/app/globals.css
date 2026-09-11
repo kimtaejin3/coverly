@@ -287,3 +287,14 @@
     }
   }
 }
+
+/* 기준음이 울리는 동안 채워지는 바. 길이는 인라인 animation-duration 으로 받는다. */
+@keyframes tone-fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+.animate-tone-fill {
+  animation-name: tone-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
