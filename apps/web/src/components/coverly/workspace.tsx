@@ -63,6 +63,10 @@ export function Workspace({
   const [voiceId, setVoiceId] = useState<string | null>(
     requestedVoice && personalVoices.some((v) => v.id === requestedVoice) ? requestedVoice : null,
   );
+  // The picked voice object, straight from the list that owns it. MyVoice polls for voices trained
+  // this session, so a just-made voice exists there but not in the server-rendered personalVoices
+  // prop below -- deriving the selection only from that prop turned a fresh voice into "undefined".
+  const [pickedVoice, setPickedVoice] = useState<Voice | null>(null);
   const [coverId, setCoverId] = useState<string | null>(null);
   const [finished, setFinished] = useState<{
     id: string;
@@ -92,8 +96,9 @@ export function Workspace({
   // Personal voices are not catalogue rows; give the summary and result panes the shape they
   // expect.
   const voice = useMemo(
-    () => (selectedPersonal ? asVoice(selectedPersonal) : null),
-    [selectedPersonal],
+    () =>
+      pickedVoice ?? (selectedPersonal ? asVoice(selectedPersonal) : null),
+    [pickedVoice, selectedPersonal],
   );
 
   const handleUpload = useCallback((next: UploadedSong | null) => {
@@ -273,7 +278,10 @@ export function Workspace({
               vocalRange={vocalRange}
               initial={personalVoices}
               selectedId={voiceId}
-              onSelect={(next) => setVoiceId(next.id)}
+              onSelect={(next) => {
+                setVoiceId(next.id);
+                setPickedVoice(next);
+              }}
               signedIn={signedIn}
             />
           </Field>
@@ -301,7 +309,7 @@ export function Workspace({
               </Button>
             )}
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              {blocker ?? `${voice?.name} · ${PREVIEW.durationSeconds}초 미리보기`}
+              {blocker ?? `${voice?.name ?? "내 목소리"} · ${PREVIEW.durationSeconds}초 미리보기`}
             </p>
             {signedIn ? (
               <div className="mt-2 flex justify-center">
