@@ -60,6 +60,19 @@ const STRUGGLE_MS = 6000;
  * value anything is decided on.
  */
 const FALSETTO_JUMP_DB = 8;
+/**
+ * How long a reading survives a dropout before the display gives up on it.
+ *
+ * The detector runs ten times a second and returns 0 whenever a frame is unvoiced -- between
+ * syllables, on a breath, on a consonant. Rendering that directly made every label blink several
+ * times a second. Holding the last reading for a moment costs nothing: nobody's pitch changes
+ * meaningfully in half a second, and the gate that actually advances the step reads the raw value,
+ * not this one.
+ */
+const PITCH_HOLD_MS = 500;
+/** Same idea for the level warning, which otherwise strobes whenever someone breathes. */
+const QUIET_HOLD_MS = 700;
+const QUIET_LEVEL = 0.01;
 
 export interface ScaleResult {
   blob: Blob;
@@ -101,9 +114,12 @@ type Phase = "idle" | "calibrate" | "tone" | "listen" | "saving";
 export function ScaleTest({
   onDone,
   onCancel,
+  /** "건너뛰기" only reads right when there is a next step to skip to. Standalone, there isn't. */
+  cancelLabel = "건너뛰기",
 }: {
   onDone: (result: ScaleResult) => void;
   onCancel: () => void;
+  cancelLabel?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [steps, setSteps] = useState<number[]>([]);
@@ -133,6 +149,8 @@ export function ScaleTest({
   const reachedRef = useRef(0);
   const calibrationRef = useRef<number[]>([]);
   const doneRef = useRef(false);
+  const pitchSeenAtRef = useRef(0);
+  const quietSinceRef = useRef(0);
   const h1h2Ref = useRef(0);
   /** H1-H2 of each completed step, in order. The first few set this singer's chest baseline. */
   const baselineRef = useRef<number[]>([]);
@@ -210,8 +228,12 @@ export function ScaleTest({
       stepRef.current = index;
       targetRef.current = list[index];
       holdRef.current = 0;
+      pitchSeenAtRef.current = 0;
+      quietSinceRef.current = 0;
       setStep(index);
       setHold(0);
+      setHeard(0);
+      setQuiet(false);
       setStruggling(false);
       setPhaseBoth("tone");
       const recorder = recorderRef.current;
@@ -241,8 +263,22 @@ export function ScaleTest({
     for (let i = 0; i < buffer.length; i += 1) sum += buffer[i] * buffer[i];
     const level = Math.sqrt(sum / buffer.length);
     const hz = detectPitch(buffer, context.sampleRate);
-    setQuiet(level < 0.01);
-    setHeard(hz);
+    const now = Date.now();
+
+    // Both of these are display smoothing only. Everything that decides anything below reads `hz`.
+    if (hz > 0) {
+      pitchSeenAtRef.current = now;
+      setHeard(hz);
+    } else if (now - pitchSeenAtRef.current > PITCH_HOLD_MS) {
+      setHeard(0);
+    }
+    if (level >= QUIET_LEVEL) {
+      quietSinceRef.current = 0;
+      setQuiet(false);
+    } else {
+      if (!quietSinceRef.current) quietSinceRef.current = now;
+      if (now - quietSinceRef.current > QUIET_HOLD_MS) setQuiet(true);
+    }
 
     if (hz > 0) {
       const spectrum = new Float32Array(analyser.frequencyBinCount);
@@ -383,7 +419,7 @@ export function ScaleTest({
             음역대 재기 시작
           </Button>
           <Button size="lg" variant="ghost" onClick={onCancel}>
-            건너뛰기
+            {cancelLabel}
           </Button>
         </div>
       </div>
@@ -453,79 +489,83 @@ export function ScaleTest({
         </p>
       </div>
 
-      {phase === "listen" ? (
-        <div className="space-y-3">
-          {/* A needle beats a sentence here. "조금 낮아요" makes someone read and translate; a
-              marker sliding towards the middle is the same information as a direction to move. */}
-          <div className="px-1">
-            <div className="relative h-9">
-              <div className="absolute inset-x-0 top-4 h-1 rounded-full bg-secondary" />
-              {/* The window that counts as a match, drawn so the target is a zone, not a point. */}
-              <div
-                className="absolute top-4 h-1 rounded-full bg-primary/25"
-                style={{
-                  left: `${50 - (TOLERANCE_CENTS / 300) * 50}%`,
-                  width: `${(TOLERANCE_CENTS / 300) * 100}%`,
-                }}
-              />
-              <div className="absolute top-2 left-1/2 h-5 w-px -translate-x-1/2 bg-foreground/30" />
-              {heard > 0 ? (
-                <span
-                  className={cn(
-                    "absolute top-1 size-7 -translate-x-1/2 rounded-full border-2 transition-[left] duration-100",
-                    Math.abs(off) <= TOLERANCE_CENTS
-                      ? "border-primary bg-primary/20"
-                      : "border-muted-foreground/40 bg-background",
-                  )}
-                  style={{ left: `${50 + needle * 50}%` }}
-                />
-              ) : null}
-            </div>
-            <div className="flex justify-between text-[0.625rem] text-muted-foreground">
-              <span>낮음</span>
-              <span>{heard > 0 ? noteName(heard) : "음을 잡는 중…"}</span>
-              <span>높음</span>
-            </div>
-          </div>
-
-          {/* Holding fills the bar. Six frames at 100ms is 0.6s, comfortably past the 0.28s the
-              worker needs to call it a held note. */}
-          <div className="mx-auto h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+      {/* Always mounted, dimmed while the tone plays. Swapping this block in and out every
+          couple of seconds was most of the flicker -- the eye reads a control appearing as
+          something new to deal with, even when it is the same control it saw a moment ago. */}
+      <div
+        className={cn(
+          "space-y-3 transition-opacity duration-200",
+          phase === "listen" ? "opacity-100" : "pointer-events-none opacity-35",
+        )}
+      >
+        <div className="px-1">
+          <div className="relative h-9">
+            <div className="absolute inset-x-0 top-4 h-1 rounded-full bg-secondary" />
+            {/* The window that counts as a match, so the target reads as a zone, not a point. */}
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-100"
-              style={{ width: `${Math.min(100, (hold / HOLD_FRAMES) * 100)}%` }}
+              className="absolute top-4 h-1 rounded-full bg-primary/25"
+              style={{
+                left: `${50 - (TOLERANCE_CENTS / 300) * 50}%`,
+                width: `${(TOLERANCE_CENTS / 300) * 100}%`,
+              }}
+            />
+            <div className="absolute top-2 left-1/2 h-5 w-px -translate-x-1/2 bg-foreground/30" />
+            <span
+              className={cn(
+                "absolute top-1 size-7 -translate-x-1/2 rounded-full border-2",
+                "transition-[left,opacity,border-color] duration-100",
+                heard > 0 ? "opacity-100" : "opacity-0",
+                Math.abs(off) <= TOLERANCE_CENTS
+                  ? "border-primary bg-primary/20"
+                  : "border-muted-foreground/40 bg-background",
+              )}
+              style={{ left: `${50 + needle * 50}%` }}
             />
           </div>
-
-          {quiet ? (
-            <p className="text-center text-xs text-amber-600 dark:text-amber-500">
-              소리가 안 들려요. 마이크에 가까이서 불러주세요.
-            </p>
-          ) : null}
+          <div className="flex items-center justify-between text-[0.625rem] text-muted-foreground">
+            <span className="w-10">낮음</span>
+            {/* Fixed width: the note name changes length as the pitch moves, and letting it push
+                the two edge labels around made the whole row twitch. */}
+            <span className="w-28 text-center tabular-nums">
+              {heard > 0 ? noteName(heard) : "음을 잡는 중…"}
+            </span>
+            <span className="w-10 text-right">높음</span>
+          </div>
         </div>
-      ) : (
-        <div className="h-[4.75rem]" aria-hidden />
-      )}
 
-      {falsetto ? (
-        <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs leading-relaxed text-muted-foreground">
-          지금부터 <span className="font-medium text-foreground">가성</span>으로 들려요. 계속
-          올라가도 되지만, 곡 추천은 진성 기준으로 해드립니다.
-        </p>
-      ) : null}
+        {/* Holding fills the bar. Six frames at 100ms is 0.6s, comfortably past the 0.28s the
+            worker needs to call it a held note. */}
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-100"
+            style={{ width: `${Math.min(100, (hold / HOLD_FRAMES) * 100)}%` }}
+          />
+        </div>
+      </div>
 
-      {struggling ? (
-        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-center text-xs leading-relaxed text-amber-700 dark:text-amber-500">
-          이 음이 잘 안 나오면 여기가 한계예요. 아래 버튼으로 끝내면 됩니다.
-        </p>
-      ) : null}
-
-      {comfortHz > 0 ? (
-        <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <CheckCircle className="size-3.5 text-primary" weight="fill" aria-hidden />
-          편한 한계 <span className="font-medium text-foreground">{noteName(comfortHz)}</span>
-        </p>
-      ) : null}
+      {/* One slot, one message, reserved height. Three separately mounted notices meant the
+          buttons below moved every time the state changed. */}
+      <div className="flex min-h-[3.25rem] items-center justify-center">
+        {quiet ? (
+          <p className="w-full rounded-lg bg-amber-500/10 px-3 py-2 text-center text-xs leading-relaxed text-amber-700 dark:text-amber-500">
+            소리가 안 들려요. 마이크에 가까이서 불러주세요.
+          </p>
+        ) : struggling ? (
+          <p className="w-full rounded-lg bg-amber-500/10 px-3 py-2 text-center text-xs leading-relaxed text-amber-700 dark:text-amber-500">
+            이 음이 잘 안 나오면 여기가 한계예요. 아래 버튼으로 끝내면 됩니다.
+          </p>
+        ) : falsetto ? (
+          <p className="w-full rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs leading-relaxed text-muted-foreground">
+            지금부터 <span className="font-medium text-foreground">가성</span>으로 들려요. 곡 추천은
+            진성 기준으로 해드립니다.
+          </p>
+        ) : comfortHz > 0 ? (
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle className="size-3.5 text-primary" weight="fill" aria-hidden />
+            편한 한계 <span className="font-medium text-foreground">{noteName(comfortHz)}</span>
+          </p>
+        ) : null}
+      </div>
 
       <div className="grid gap-2">
         <Button size="lg" variant={comfortHz > 0 ? "ghost" : "secondary"} onClick={markComfort}>

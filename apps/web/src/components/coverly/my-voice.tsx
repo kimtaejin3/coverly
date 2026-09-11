@@ -59,11 +59,14 @@ export function asVoice(voice: PersonalVoice): Voice {
  * are more things you can sing with, so they belong where the other voices are.
  */
 export function MyVoice({
+  vocalRange,
   initial,
   selectedId,
   onSelect,
   signedIn,
 }: {
+  /** The person's measured range, so the recorder need not ask for it again. */
+  vocalRange?: { comfortHigh: number | null; modalHigh: number | null } | null;
   initial: PersonalVoice[];
   selectedId: string | null;
   onSelect: (voice: Voice) => void;
@@ -113,6 +116,7 @@ export function MyVoice({
       {recording !== null ? (
         <VoiceRecorder
           voiceId={recording === "new" ? undefined : recording}
+          knownRange={vocalRange}
           onTrainingStarted={() => {
             setRecording(null);
             void poll();

@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ResultPane, type PaneState } from "@/components/coverly/result-pane";
 import { SectionPicker } from "@/components/coverly/section-picker";
 import { CouponForm } from "@/components/coverly/coupon-form";
-import { SongFinder } from "@/components/coverly/song-finder";
+import { VocalRangeCard, type VocalRange } from "@/components/coverly/vocal-range";
 import { MyVoice, asVoice, type PersonalVoice } from "@/components/coverly/my-voice";
 import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-picker";
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
@@ -38,10 +38,12 @@ export function Workspace({
   signedIn,
   recent,
   personalVoices,
+  vocalRange,
 }: {
   signedIn: boolean;
   recent: RecentCover[];
   personalVoices: PersonalVoice[];
+  vocalRange: VocalRange;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -260,27 +262,15 @@ export function Workspace({
           </Field>
 
           <div className="mb-5">
-            <SongFinder
-              comfortHigh={
-                selectedPersonal?.f0_comfort_high ?? personalVoices[0]?.f0_comfort_high ?? null
-              }
-              modalHigh={
-                selectedPersonal?.f0_modal_high ??
-                personalVoices[0]?.f0_modal_high ??
-                selectedPersonal?.f0_absolute_high ??
-                personalVoices[0]?.f0_absolute_high ??
-                selectedPersonal?.f0_peak ??
-                personalVoices[0]?.f0_peak ??
-                null
-              }
-              falsettoHigh={
-                selectedPersonal?.f0_falsetto_high ?? personalVoices[0]?.f0_falsetto_high ?? null
-              }
-            />
+            {/* The range belongs to the person, so it is read from them rather than from whichever
+                voice happens to be selected. A voice they trained earlier already contributed its
+                measurement to that row. */}
+            <VocalRangeCard signedIn={signedIn} initial={vocalRange} />
           </div>
 
           <Field step={3} label="목소리 고르기">
             <MyVoice
+              vocalRange={vocalRange}
               initial={personalVoices}
               selectedId={voiceId}
               onSelect={(next) => setVoiceId(next.id)}

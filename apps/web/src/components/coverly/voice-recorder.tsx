@@ -49,10 +49,13 @@ function pickMimeType(): string | undefined {
 
 export function VoiceRecorder({
   voiceId,
+  knownRange,
   onTrainingStarted,
 }: {
   /** The voice this recording replaces. Omit to add a new one. */
   voiceId?: string;
+  /** Already measured, from the person rather than this voice. Skips step one. */
+  knownRange?: { comfortHigh: number | null; modalHigh: number | null } | null;
   onTrainingStarted: (id: string) => void;
 }) {
   const [recording, setRecording] = useState(false);
@@ -68,7 +71,9 @@ export function VoiceRecorder({
   // this mandatory would put another wall in front of a funnel that already asks for 30 seconds
   // of singing and twenty minutes of waiting.
   const [scale, setScale] = useState<ScaleResult | null>(null);
-  const [scaleDone, setScaleDone] = useState(false);
+  // Measured already? Then do not ask again. Singing the scale a second time would sharpen the
+  // reference clip a little, but not enough to justify making everyone repeat it.
+  const [scaleDone, setScaleDone] = useState(Boolean(knownRange?.modalHigh));
 
   const [songId, setSongId] = useState(PRACTICE_SONGS[0].id);
   // Only auto-pick until they touch the control. Re-sorting under someone's cursor is rude, and
@@ -84,10 +89,10 @@ export function VoiceRecorder({
       .catch(() => setRanges([]));
   }, []);
 
-  const comfortHigh = scale?.comfortHz || null;
+  const comfortHigh = scale?.comfortHz || knownRange?.comfortHigh || null;
   // 진성 ceiling, not the whole reach: a song's 최고음 is a 진성 note, so ranking practice songs
   // against a falsetto top would hand someone a take they cannot actually sing in chest.
-  const modalHigh = scale?.modalTopHz || null;
+  const modalHigh = scale?.modalTopHz || knownRange?.modalHigh || null;
 
   /** Practice songs ordered around this singer, once there is a measurement to order them by. */
   const ranked = useMemo(() => {
@@ -327,6 +332,20 @@ export function VoiceRecorder({
               setScale(null);
               setScaleDone(false);
             }}
+          >
+            다시 재기
+          </button>
+        </div>
+      ) : knownRange?.modalHigh ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-secondary/50 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">
+            음역대는 이미 쟀어요 · 진성{" "}
+            <span className="font-medium text-foreground">{noteName(knownRange.modalHigh)}</span>
+          </span>
+          <button
+            type="button"
+            className="shrink-0 text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            onClick={() => setScaleDone(false)}
           >
             다시 재기
           </button>

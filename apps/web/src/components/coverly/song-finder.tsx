@@ -29,12 +29,15 @@ export function SongFinder({
   comfortHigh,
   modalHigh,
   falsettoHigh,
+  onMeasure,
 }: {
   comfortHigh: number | null;
   /** 진성 ceiling. Matching compares to this because song 최고음 is 진성 in 77 of 78 rows. */
   modalHigh: number | null;
   /** 가성 ceiling. Shown as a footnote -- taking a chorus in falsetto is a real thing people do. */
   falsettoHigh: number | null;
+  /** Opens the scale. Offered from inside the list, where the gap is felt. */
+  onMeasure?: () => void;
 }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
   const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
@@ -91,7 +94,7 @@ export function SongFinder({
               ? `진성 ${noteName(modalHigh)} 기준${
                   counts.comfort > 0 ? ` · 편하게 ${counts.comfort}곡` : ""
                 }`
-              : "내 목소리를 만들면 나에게 맞춰 정렬돼요"}
+              : `${songs?.length ?? 0}곡 · 음역대를 재면 나에게 맞춰 정렬돼요`}
           </span>
         </span>
         <CaretRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -104,10 +107,29 @@ export function SongFinder({
         description={
           modalHigh
             ? "노래방에서 부를 때 기준이에요. 숫자만큼 키를 내리면 편해집니다."
-            : "내 목소리를 만들면 나에게 맞는 순서로 정렬돼요."
+            : "음역대를 재면 부를 수 있는 곡이 앞으로 정렬돼요."
         }
       >
         <div className="space-y-3 pb-1">
+          {!modalHigh && onMeasure ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onMeasure();
+              }}
+              className="flex w-full items-center justify-between gap-2 rounded-lg bg-primary/8 px-3 py-2.5 text-left text-xs transition-colors hover:bg-primary/12"
+            >
+              <span>
+                <span className="block font-medium">음역대를 재면 정확해져요</span>
+                <span className="block text-muted-foreground">
+                  30초면 끝나고, 목소리를 안 만들어도 됩니다
+                </span>
+              </span>
+              <CaretRight className="size-3.5 shrink-0 text-primary" aria-hidden />
+            </button>
+          ) : null}
+
           {modalHigh ? (
             <p className="rounded-lg bg-primary/8 px-3 py-2 text-xs leading-relaxed">
               편한 한계{" "}

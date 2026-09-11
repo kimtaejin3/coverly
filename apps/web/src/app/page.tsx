@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import type { PersonalVoice } from "@/components/coverly/my-voice";
+import type { VocalRange } from "@/components/coverly/vocal-range";
 import { SiteHeader } from "@/components/coverly/site-header";
 import { Workspace } from "@/components/coverly/workspace";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,6 +13,20 @@ import { getSessionUser } from "@/lib/supabase/session";
 export const metadata: Metadata = {
   title: "Coverly — 좋아하는 노래를 새로운 목소리로",
 };
+
+async function loadVocalRange(): Promise<VocalRange> {
+  const supabase = await createClient();
+  // RLS keeps this to the caller's own row.
+  const { data } = await supabase
+    .from("users")
+    .select("f0_comfort_high, f0_modal_high, f0_falsetto_high")
+    .maybeSingle();
+  return {
+    comfortHigh: data?.f0_comfort_high ?? null,
+    modalHigh: data?.f0_modal_high ?? null,
+    falsettoHigh: data?.f0_falsetto_high ?? null,
+  };
+}
 
 async function loadPersonalVoices(): Promise<PersonalVoice[]> {
   const supabase = await createClient();
@@ -34,9 +49,13 @@ export default async function HomePage() {
 
   // These two do not depend on each other, and a serial await here costs a full round trip to
   // Supabase before the page can render.
-  const [recent, personalVoices] = user
-    ? await Promise.all([listRecentCovers(6), loadPersonalVoices()])
-    : [[] as RecentCover[], [] as PersonalVoice[]];
+  const [recent, personalVoices, vocalRange] = user
+    ? await Promise.all([listRecentCovers(6), loadPersonalVoices(), loadVocalRange()])
+    : [
+        [] as RecentCover[],
+        [] as PersonalVoice[],
+        { comfortHigh: null, modalHigh: null, falsettoHigh: null } as VocalRange,
+      ];
 
   return (
     <>
@@ -55,6 +74,7 @@ export default async function HomePage() {
             signedIn={Boolean(user)}
             recent={recent}
             personalVoices={personalVoices}
+            vocalRange={vocalRange}
           />
         </Suspense>
       </main>
