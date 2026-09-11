@@ -33,7 +33,7 @@ export function GeneratingPanel({
   coverId: string;
   /** Length of the section being converted, so the bar is paced for this job. */
   audioSeconds?: number;
-  onDone: (audioUrl: string | null, shareUrl: string | null) => void;
+  onDone: (audioUrl: string | null) => void;
   onFailed: (message: string) => void;
 }) {
   const [progress, setProgress] = useState(0);
@@ -63,7 +63,7 @@ export function GeneratingPanel({
         if (data.status === "completed") {
           stopped = true;
           setProgress(100);
-          doneRef.current(data.audioUrl ?? null, data.shareUrl ?? null);
+          doneRef.current(data.audioUrl ?? null);
         } else if (data.status === "failed") {
           stopped = true;
           failedRef.current(data.errorMessage ?? "생성에 실패했어요. 다시 시도해 주세요.");

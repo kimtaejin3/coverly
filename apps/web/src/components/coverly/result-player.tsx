@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Check, Copy, DownloadSimple, Pause, Play } from "@phosphor-icons/react";
-import { toast } from "sonner";
+import { DownloadSimple, Pause, Play } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import { formatSeconds } from "@/lib/format";
@@ -15,31 +14,12 @@ interface ResultPlayerProps {
   durationSeconds: number;
   /** Signed URL, valid for an hour; null while the cover is still being generated. */
   audioUrl: string | null;
-  /**
-   * Path with the share token. Copying the address bar instead would hand out a link that only
-   * works for the owner, which is the opposite of what the button promises.
-   */
-  shareUrl?: string;
-  /**
-   * Download and copy-link. Off for someone who arrived by a shared link: the link is meant to let
-   * them listen, and handing them the file and a re-share button is a distribution the owner did
-   * not ask for.
-   */
-  showActions?: boolean;
 }
 
-export function ResultPlayer({
-  voice,
-  title,
-  durationSeconds,
-  audioUrl,
-  shareUrl,
-  showActions = true,
-}: ResultPlayerProps) {
+export function ResultPlayer({ voice, title, durationSeconds, audioUrl }: ResultPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
-  const [copied, setCopied] = useState(false);
 
   function toggle() {
     const audio = audioRef.current;
@@ -50,18 +30,6 @@ export function ResultPlayer({
       void audio.play();
     }
     setPlaying(!playing);
-  }
-
-  async function copyLink() {
-    const link = shareUrl ? new URL(shareUrl, window.location.origin).toString() : window.location.href;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      toast.success("링크를 복사했어요. 받은 사람은 로그인 없이 들을 수 있어요.");
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      toast.error("복사하지 못했어요. 주소창의 링크를 직접 복사해 주세요.");
-    }
   }
 
   return (
@@ -111,9 +79,13 @@ export function ResultPlayer({
         />
       ) : null}
 
-      {showActions ? (
-      <div className="grid gap-2 p-4 sm:grid-cols-2">
-        <Button variant="secondary" asChild={Boolean(audioUrl)} disabled={!audioUrl}>
+      <div className="p-4">
+        <Button
+          variant="secondary"
+          className="w-full"
+          asChild={Boolean(audioUrl)}
+          disabled={!audioUrl}
+        >
           {audioUrl ? (
             <a href={audioUrl} download={`${title}.mp3`}>
               <DownloadSimple className="size-4" aria-hidden />
@@ -126,12 +98,7 @@ export function ResultPlayer({
             </span>
           )}
         </Button>
-        <Button variant="secondary" onClick={copyLink}>
-          {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-          링크 복사
-        </Button>
       </div>
-      ) : null}
     </div>
   );
 }

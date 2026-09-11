@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext<"/api/
 
   const { data: cover } = await supabase
     .from("covers")
-    .select("id, status, result_url, voice_id, title, completed_at, share_token")
+    .select("id, status, result_url, voice_id, title, completed_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -45,7 +45,6 @@ export async function GET(_request: NextRequest, { params }: RouteContext<"/api/
     status: cover.status,
     audioUrl,
     // Handed back so the workspace can offer a link that works for people without an account.
-    shareUrl: `/c/${cover.id}?t=${cover.share_token}`,
     queuePosition: job?.queue_position ?? null,
     errorMessage: job?.error_message ?? null,
     voiceId: cover.voice_id,

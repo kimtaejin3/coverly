@@ -68,7 +68,6 @@ export function Workspace({
     id: string;
     title: string;
     audioUrl: string | null;
-    shareUrl: string | null;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [tab, setTab] = useState<"file" | "youtube">("file");
@@ -198,7 +197,6 @@ export function Workspace({
         voice: voice!,
         title: finished.title,
         audioUrl: finished.audioUrl,
-        shareUrl: finished.shareUrl,
       }
     : coverId
       ? {
@@ -341,7 +339,7 @@ export function Workspace({
           canGenerateFull={canGenerateFull}
           makingFull={submitting}
           onMakeFull={() => void startGeneration({ full: true })}
-          onDone={(audioUrl, shareUrl) => {
+          onDone={(audioUrl) => {
             const id = coverId;
             setCoverId(null);
             if (id) {
@@ -352,7 +350,6 @@ export function Workspace({
                     ? (song?.file.name.replace(/\.[^.]+$/, "") ?? "내 커버")
                     : "YouTube 커버",
                 audioUrl,
-                shareUrl,
               });
               router.refresh();
             }

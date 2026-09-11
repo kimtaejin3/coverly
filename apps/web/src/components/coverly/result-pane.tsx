@@ -22,7 +22,6 @@ export type PaneState =
       voice: Voice;
       title: string;
       audioUrl: string | null;
-      shareUrl: string | null;
     };
 
 /**
@@ -43,7 +42,7 @@ export function ResultPane({
   canGenerateFull?: boolean;
   onMakeFull?: () => void;
   makingFull?: boolean;
-  onDone: (audioUrl: string | null, shareUrl: string | null) => void;
+  onDone: (audioUrl: string | null) => void;
   onFailed: (message: string) => void;
 }) {
   if (state.kind === "generating") {
@@ -68,7 +67,6 @@ export function ResultPane({
           title={state.title}
           durationSeconds={PREVIEW.durationSeconds}
           audioUrl={state.audioUrl}
-          shareUrl={state.shareUrl ?? undefined}
         />
 
         <div className="rounded-2xl bg-primary/8 p-5">
@@ -109,8 +107,8 @@ export function ResultPane({
         </Alert>
 
         <Button asChild variant="ghost" className="w-full">
-          <Link href={state.shareUrl ?? `/c/${state.coverId}`}>
-            이 커버 링크 열기 <ArrowRight className="size-3.5" weight="bold" aria-hidden />
+          <Link href={`/c/${state.coverId}`}>
+            커버 페이지 열기 <ArrowRight className="size-3.5" weight="bold" aria-hidden />
           </Link>
         </Button>
       </div>
