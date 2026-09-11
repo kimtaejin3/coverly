@@ -62,6 +62,9 @@ export function VoiceRecorder({
   const [seconds, setSeconds] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Only for a new voice -- retraining keeps the name it already has. Empty means "let the server
+  // pick", which numbers it (내 목소리, 내 목소리 2 …). The point is the person naming it by use.
+  const [voiceName, setVoiceName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // Refused for want of credits — offer the top-up right here rather than sending them hunting
   // through the account menu with a finished recording in hand.
@@ -225,6 +228,7 @@ export function VoiceRecorder({
         body: JSON.stringify({
           sourcePath,
           ...(voiceId ? { voiceId } : {}),
+          ...(!voiceId && voiceName.trim() ? { name: voiceName.trim() } : {}),
           ...(scalePath ? { scalePath } : {}),
           ...(scale?.comfortHz ? { comfortHz: scale.comfortHz } : {}),
         }),
@@ -446,6 +450,22 @@ export function VoiceRecorder({
             <RangeGauge lowHz={reach.low} highHz={reach.high} className="pb-1" />
           ) : null}
           <audio src={previewUrl} controls className="w-full" />
+          {!voiceId ? (
+            <div className="space-y-1">
+              <label htmlFor="voice-name" className="text-xs text-muted-foreground">
+                이 목소리 이름 <span className="text-muted-foreground/60">(선택)</span>
+              </label>
+              <input
+                id="voice-name"
+                type="text"
+                value={voiceName}
+                onChange={(event) => setVoiceName(event.target.value)}
+                maxLength={20}
+                placeholder="예: 발라드용, 고음용"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary/50"
+              />
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             <Button
               variant="ghost"
