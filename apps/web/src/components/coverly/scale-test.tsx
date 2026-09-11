@@ -463,7 +463,8 @@ export function ScaleTest({
   }
 
   function replay() {
-    if (phaseRef.current !== "listen") return;
+    // Allowed mid-tone too: playTone stops whatever is sounding first, so this restarts cleanly.
+    if (phaseRef.current !== "listen" && phaseRef.current !== "tone") return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     holdRef.current = 0;
@@ -578,6 +579,18 @@ export function ScaleTest({
         >
           {noteName(target)}
         </p>
+        {/* The one control that matters on this screen. Hearing the note is the whole job of the
+            step, and it has to be there before, during and after the automatic play -- someone
+            who missed it, or wants it once more before they commit, taps here. */}
+        <Button
+          size="lg"
+          variant="secondary"
+          className="mt-3 h-12 w-full text-base"
+          onClick={replay}
+        >
+          <SpeakerHigh className="size-5" weight="fill" aria-hidden />
+          {phase === "tone" ? "듣는 중…" : "이 음 들어보기"}
+        </Button>
       </div>
 
       {/* While the tone sounds, a bar fills for its length -- so "listen" has a visible end and
@@ -672,15 +685,6 @@ export function ScaleTest({
       </div>
 
       <div className="grid gap-2">
-        <Button
-          size="lg"
-          variant="outline"
-          onClick={replay}
-          disabled={phase !== "listen"}
-        >
-          <SpeakerHigh className="size-4" aria-hidden />
-          다시 듣기
-        </Button>
         <Button size="lg" variant={comfortHz > 0 ? "ghost" : "secondary"} onClick={markComfort}>
           <Warning className="size-4" aria-hidden />
           {comfortHz > 0 ? "여기로 다시 표시" : "여기부터 힘들어요"}
