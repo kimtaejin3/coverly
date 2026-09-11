@@ -30,3 +30,6 @@ node_modules/
 # local secret, never commit
 .supabase-db-password
 .worker-shared-secret
+
+# 법률 검토 메모 — 공개 레포에 올리지 않는다
+legal/
