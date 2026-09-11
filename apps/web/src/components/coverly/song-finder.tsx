@@ -24,15 +24,13 @@ interface Ranked {
 }
 
 export function SongFinder({
-  comfortHigh,
   modalHigh,
   falsettoHigh,
   onMeasure,
   open,
   onOpenChange,
 }: {
-  comfortHigh: number | null;
-  /** 진성 ceiling. Matching compares to this because song 최고음 is 진성 in 77 of 78 rows. */
+  /** 진성 ceiling. Matching compares to this because song 최고음 is 진성 in nearly every row. */
   modalHigh: number | null;
   /** 가성 ceiling. Shown as a footnote -- taking a chorus in falsetto is a real thing people do. */
   falsettoHigh: number | null;
@@ -58,7 +56,7 @@ export function SongFinder({
     if (!songs) return [];
     const scored = songs.map((song) => ({
       song,
-      ...classifyFit(song.f0_peak, comfortHigh, modalHigh),
+      ...classifyFit(song.f0_peak, modalHigh),
     }));
     if (!modalHigh) return scored;
     return [...scored].sort(
@@ -66,16 +64,12 @@ export function SongFinder({
         TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
         Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
     );
-  }, [songs, comfortHigh, modalHigh]);
+  }, [songs, modalHigh]);
 
-  const counts = useMemo(() => {
-    const out = { comfort: 0, strain: 0 };
-    for (const item of ranked) {
-      if (item.tier === "comfort") out.comfort += 1;
-      if (item.tier === "strain") out.strain += 1;
-    }
-    return out;
-  }, [ranked]);
+  const comfortCount = useMemo(
+    () => ranked.filter((item) => item.tier === "comfort").length,
+    [ranked],
+  );
 
   return (
     <>
@@ -92,7 +86,7 @@ export function SongFinder({
           <span className="block truncate text-xs text-muted-foreground">
             {modalHigh
               ? `진성 ${noteName(modalHigh)} 기준${
-                  counts.comfort > 0 ? ` · 편하게 ${counts.comfort}곡` : ""
+                  comfortCount > 0 ? ` · 편하게 ${comfortCount}곡` : ""
                 }`
               : `${songs?.length ?? 0}곡 · 음역대를 재면 나에게 맞춰 정렬돼요`}
           </span>
@@ -132,15 +126,11 @@ export function SongFinder({
 
           {modalHigh ? (
             <p className="rounded-lg bg-primary/8 px-3 py-2 text-xs leading-relaxed">
-              편한 한계{" "}
-              <span className="font-medium">{noteName(comfortHigh ?? modalHigh)}</span>
-              {" · "}진성 최고 <span className="font-medium">{noteName(modalHigh)}</span>
-              {counts.comfort > 0 || counts.strain > 0 ? (
+              진성 최고 <span className="font-medium">{noteName(modalHigh)}</span>
+              {comfortCount > 0 ? (
                 <span className="text-muted-foreground">
-                  {" — "}
-                  {counts.comfort > 0 ? `편하게 ${counts.comfort}곡` : ""}
-                  {counts.comfort > 0 && counts.strain > 0 ? ", " : ""}
-                  {counts.strain > 0 ? `힘주면 ${counts.strain}곡` : ""}
+                  {" — "}이 중 <span className="font-medium text-foreground">{comfortCount}곡</span>은
+                  키 안 내리고 부를 수 있어요
                 </span>
               ) : null}
             </p>
@@ -166,24 +156,12 @@ export function SongFinder({
                     className={cn(
                       "shrink-0 rounded-md px-2 py-1 text-xs whitespace-nowrap",
                       tier === "comfort" && "bg-primary/12 font-medium text-primary",
-                      tier === "strain" &&
-                        "bg-amber-500/12 text-amber-700 dark:text-amber-500",
                       tier === "transpose" && "font-mono tabular-nums text-muted-foreground",
                       tier === "unknown" && "text-muted-foreground/60",
                     )}
-                    title={
-                      tier === "strain" && shift
-                        ? `${TIER_HINT.strain} · ${shift}키 내리면 편해요`
-                        : TIER_HINT[tier]
-                    }
+                    title={TIER_HINT[tier]}
                   >
-                    {tier === "comfort"
-                      ? "편하게"
-                      : tier === "strain"
-                        ? `힘줘야${shift ? ` ${shift}키` : ""}`
-                        : tier === "transpose"
-                          ? `${shift}키`
-                          : "미확인"}
+                    {tier === "comfort" ? "편하게" : tier === "transpose" ? `${shift}키` : "미확인"}
                   </span>
                 </li>
               ))}
@@ -199,9 +177,9 @@ export function SongFinder({
           ) : null}
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-            <span className="text-amber-600 dark:text-amber-500">힘줘야</span>는 낼 수는 있지만
-            후렴에서 무리가 가는 곡이고, 옆의 숫자만큼 키를 내리면 편해집니다. AI 커버는 어떤
-            곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가 자연스러워요.
+            <span className="font-mono text-foreground">N키</span>는 그만큼 키를 내리면 편하게
+            부르는 곡이에요. AI 커버는 어떤 곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가
+            자연스러워요.
           </p>
         </div>
       </ResponsiveModal>

@@ -66,7 +66,7 @@ export function MyVoice({
   signedIn,
 }: {
   /** The person's measured range, so the recorder need not ask for it again. */
-  vocalRange?: { comfortHigh: number | null; modalHigh: number | null } | null;
+  vocalRange?: { modalHigh: number | null } | null;
   initial: PersonalVoice[];
   selectedId: string | null;
   onSelect: (voice: Voice) => void;

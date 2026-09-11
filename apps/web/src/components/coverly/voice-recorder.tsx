@@ -34,7 +34,6 @@ const MIN_SECONDS = 30;
 /** Short enough to sit inside a <select> option without pushing the title off a phone screen. */
 function fitLabel(tier: Tier, shift: number | null): string {
   if (tier === "comfort") return "편하게";
-  if (tier === "strain") return shift ? `힘줘야 ${shift}키` : "고음 힘줘야";
   if (tier === "transpose") return `${shift}키`;
   return "음역 미확인";
 }
@@ -55,7 +54,7 @@ export function VoiceRecorder({
   /** The voice this recording replaces. Omit to add a new one. */
   voiceId?: string;
   /** Already measured, from the person rather than this voice. Skips step one. */
-  knownRange?: { comfortHigh: number | null; modalHigh: number | null } | null;
+  knownRange?: { modalHigh: number | null } | null;
   onTrainingStarted: (id: string) => void;
 }) {
   const [recording, setRecording] = useState(false);
@@ -92,7 +91,6 @@ export function VoiceRecorder({
       .catch(() => setRanges([]));
   }, []);
 
-  const comfortHigh = scale?.comfortHz || knownRange?.comfortHigh || null;
   // 진성 ceiling, not the whole reach: a song's 최고음 is a 진성 note, so ranking practice songs
   // against a falsetto top would hand someone a take they cannot actually sing in chest.
   const modalHigh = scale?.modalTopHz || knownRange?.modalHigh || null;
@@ -104,7 +102,7 @@ export function VoiceRecorder({
     );
     const scored = PRACTICE_SONGS.map((item) => ({
       song: item,
-      ...classifyFit(peaks.get(songKey(item.title, item.artist)) ?? null, comfortHigh, modalHigh),
+      ...classifyFit(peaks.get(songKey(item.title, item.artist)) ?? null, modalHigh),
     }));
     if (!modalHigh) return scored;
     const group = (pin?: "first" | "last") => (pin === "first" ? -1 : pin === "last" ? 1 : 0);
@@ -114,7 +112,7 @@ export function VoiceRecorder({
         TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
         Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
     );
-  }, [ranges, comfortHigh, modalHigh]);
+  }, [ranges, modalHigh]);
 
   // The best fit is the useful default once we know the range. Before that, the hand-ordered list
   // stands and its first entry is the pick-your-own option.
@@ -230,7 +228,6 @@ export function VoiceRecorder({
           ...(voiceId ? { voiceId } : {}),
           ...(!voiceId && voiceName.trim() ? { name: voiceName.trim() } : {}),
           ...(scalePath ? { scalePath } : {}),
-          ...(scale?.comfortHz ? { comfortHz: scale.comfortHz } : {}),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -314,14 +311,8 @@ export function VoiceRecorder({
       {scale ? (
         <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/8 px-3 py-2 text-xs">
           <span className="text-muted-foreground">
-            편한 한계{" "}
-            <span className="font-medium text-foreground">{noteName(scale.comfortHz)}</span>
-            {scale.modalTopHz > scale.comfortHz ? (
-              <>
-                {" · "}진성{" "}
-                <span className="font-medium text-foreground">{noteName(scale.modalTopHz)}</span>
-              </>
-            ) : null}
+            진성 최고{" "}
+            <span className="font-medium text-foreground">{noteName(scale.modalTopHz)}</span>
             {scale.topHz > scale.modalTopHz ? (
               <>
                 {" · "}가성{" "}

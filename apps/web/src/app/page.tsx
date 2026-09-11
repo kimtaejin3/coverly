@@ -19,10 +19,9 @@ async function loadVocalRange(): Promise<VocalRange> {
   // RLS keeps this to the caller's own row.
   const { data } = await supabase
     .from("users")
-    .select("f0_comfort_high, f0_modal_high, f0_falsetto_high")
+    .select("f0_modal_high, f0_falsetto_high")
     .maybeSingle();
   return {
-    comfortHigh: data?.f0_comfort_high ?? null,
     modalHigh: data?.f0_modal_high ?? null,
     falsettoHigh: data?.f0_falsetto_high ?? null,
   };

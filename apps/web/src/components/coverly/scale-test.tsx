@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle, Microphone, SpeakerHigh, Warning, X } from "@phosphor-icons/react";
+import { Microphone, SpeakerHigh, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -98,11 +98,9 @@ const QUIET_LEVEL = 0.01;
 
 export interface ScaleResult {
   blob: Blob;
-  /** The tone that was sounding when they said it had started to hurt. */
-  comfortHz: number;
   /** Highest step they actually reached, falsetto included. */
   topHz: number;
-  /** Highest step reached before the voice flipped into falsetto, for ranking songs right away. */
+  /** Highest step reached before the voice flipped into falsetto -- the ceiling songs match on. */
   modalTopHz: number;
 }
 
@@ -150,7 +148,6 @@ export function ScaleTest({
   const [hold, setHold] = useState(0);
   const [quiet, setQuiet] = useState(false);
   const [struggling, setStruggling] = useState(false);
-  const [comfortHz, setComfortHz] = useState(0);
   const [falsetto, setFalsetto] = useState(false);
 
   const contextRef = useRef<AudioContext | null>(null);
@@ -167,7 +164,6 @@ export function ScaleTest({
   const stepsRef = useRef<number[]>([]);
   const stepRef = useRef(0);
   const holdRef = useRef(0);
-  const comfortRef = useRef(0);
   const reachedRef = useRef(0);
   const calibrationRef = useRef<number[]>([]);
   const doneRef = useRef(false);
@@ -279,9 +275,8 @@ export function ScaleTest({
       contextRef.current = null;
       onDone({
         blob,
-        comfortHz: comfortRef.current,
-        topHz: reachedRef.current || comfortRef.current,
-        modalTopHz: modalTopRef.current || reachedRef.current || comfortRef.current,
+        topHz: reachedRef.current,
+        modalTopHz: modalTopRef.current || reachedRef.current,
       });
     };
     if (recorder.state === "paused") recorder.resume();
@@ -476,9 +471,7 @@ export function ScaleTest({
 
       doneRef.current = false;
       calibrationRef.current = [];
-      comfortRef.current = 0;
       reachedRef.current = 0;
-      setComfortHz(0);
       setPhaseBoth("calibrate");
       loopRef.current = setInterval(tick, FRAME_MS);
     } catch {
@@ -495,12 +488,6 @@ export function ScaleTest({
     setHold(0);
     setStruggling(false);
     void sound(targetRef.current);
-  }
-
-  function markComfort() {
-    const hz = targetRef.current;
-    comfortRef.current = hz;
-    setComfortHz(hz);
   }
 
   const target = targetRef.current;
@@ -700,24 +687,18 @@ export function ScaleTest({
             지금부터 <span className="font-medium text-foreground">가성</span>으로 들려요. 곡 추천은
             진성 기준으로 해드립니다.
           </p>
-        ) : comfortHz > 0 ? (
-          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <CheckCircle className="size-3.5 text-primary" weight="fill" aria-hidden />
-            편한 한계 <span className="font-medium text-foreground">{noteName(comfortHz)}</span>
-          </p>
         ) : null}
       </div>
 
-      <div className="grid gap-2">
-        <Button size="lg" variant={comfortHz > 0 ? "ghost" : "secondary"} onClick={markComfort}>
-          <Warning className="size-4" aria-hidden />
-          {comfortHz > 0 ? "여기로 다시 표시" : "여기부터 힘들어요"}
-        </Button>
-        <Button size="lg" variant={struggling ? "default" : "ghost"} onClick={finish}>
-          <X className="size-4" aria-hidden />
-          더 못 올라가겠어요
-        </Button>
-      </div>
+      <Button
+        size="lg"
+        variant={struggling ? "default" : "ghost"}
+        className="w-full"
+        onClick={finish}
+      >
+        <X className="size-4" aria-hidden />
+        더 못 올라가겠어요
+      </Button>
     </div>
   );
 }

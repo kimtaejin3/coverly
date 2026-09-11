@@ -10,8 +10,9 @@ import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { noteName } from "@/lib/pitch";
 
 export interface VocalRange {
-  comfortHigh: number | null;
+  /** Highest 진성 note measured. The single ceiling song matching compares against. */
   modalHigh: number | null;
+  /** Highest note reached in 가성, when they used it. Shown, never matched on. */
   falsettoHigh: number | null;
 }
 
@@ -50,7 +51,6 @@ export function VocalRangeCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          comfortHz: next.comfortHigh,
           modalHz: next.modalHigh,
           falsettoHz: next.falsettoHigh,
         }),
@@ -84,7 +84,6 @@ export function VocalRangeCard({
             onDone={(result) => {
               setMeasuring(false);
               void save({
-                comfortHigh: result.comfortHz || result.modalTopHz,
                 modalHigh: result.modalTopHz,
                 falsettoHigh: result.topHz > result.modalTopHz ? result.topHz : null,
               });
@@ -111,8 +110,7 @@ export function VocalRangeCard({
           <span className="block truncate text-xs text-muted-foreground">
             {measured ? (
               <>
-                편한 한계 {noteName(range.comfortHigh ?? range.modalHigh!)} · 진성{" "}
-                {noteName(range.modalHigh!)}
+                진성 최고 {noteName(range.modalHigh!)}
                 {range.falsettoHigh ? ` · 가성 ${noteName(range.falsettoHigh)}` : ""}
               </>
             ) : (
@@ -124,7 +122,6 @@ export function VocalRangeCard({
       </button>
 
       <SongFinder
-        comfortHigh={range.comfortHigh}
         modalHigh={range.modalHigh}
         falsettoHigh={range.falsettoHigh}
         open={songsOpen}
