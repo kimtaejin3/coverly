@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CircleNotch, Info, MusicNotes, WaveTriangle } from "@phosphor-icons/react";
+import { ArrowRight, Info, MusicNotes, WaveTriangle } from "@phosphor-icons/react";
 
 import { AiNotice } from "@/components/coverly/ai-notice";
 import { GeneratingPanel } from "@/components/coverly/generating-panel";
 import { ResultPlayer } from "@/components/coverly/result-player";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { PREVIEW, PRICING } from "@/lib/config";
-import { formatKrw } from "@/lib/format";
+import { PREVIEW } from "@/lib/config";
 import type { Voice } from "@/lib/types";
 
 export type PaneState =
@@ -31,17 +30,10 @@ export type PaneState =
  */
 export function ResultPane({
   state,
-  canGenerateFull = false,
-  onMakeFull,
-  makingFull = false,
   onDone,
   onFailed,
 }: {
   state: PaneState;
-  /** Whether this account may ask for a whole song rather than the preview. */
-  canGenerateFull?: boolean;
-  onMakeFull?: () => void;
-  makingFull?: boolean;
   onDone: (audioUrl: string | null) => void;
   onFailed: (message: string) => void;
 }) {
@@ -69,40 +61,12 @@ export function ResultPane({
           audioUrl={state.audioUrl}
         />
 
-        <div className="rounded-2xl bg-primary/8 p-5">
-          <h2 className="font-medium">전체 곡으로 만들기</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-            지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 목소리로 완성할 수 있습니다.
-          </p>
-          {canGenerateFull ? (
-            <>
-              <Button className="mt-4 h-11 w-full" onClick={onMakeFull} disabled={makingFull}>
-                {makingFull ? (
-                  <CircleNotch className="size-4 animate-spin" aria-hidden />
-                ) : null}
-                {makingFull ? "시작하는 중…" : "전체 곡 만들기"}
-              </Button>
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                올린 파일을 그대로 씁니다. 길이에 따라 몇 분 걸려요.
-              </p>
-            </>
-          ) : (
-            <>
-              <Button className="mt-4 h-11 w-full" disabled>
-                전체 곡 만들기 · {formatKrw(PRICING.fullCoverKrw)}
-              </Button>
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                결제 기능은 준비 중입니다
-              </p>
-            </>
-          )}
-        </div>
 
         <Alert>
           <Info className="size-4" aria-hidden />
           <AlertDescription className="leading-relaxed">
-            내려받은 파일을 외부에 올릴 때는 원곡의 권리 관계를 직접 확인해 주세요. 공개와 배포의
-            책임은 이용자에게 있습니다.
+            만든 커버는 내 계정에서만 들을 수 있습니다. 파일로 내려받거나 외부에 공유할 수는
+            없습니다.
           </AlertDescription>
         </Alert>
 
@@ -164,7 +128,7 @@ export function ResultPane({
         {[
           "가지고 있는 음원을 올립니다",
           "내 목소리를 만듭니다",
-          "완성된 커버를 듣고 내려받습니다",
+          "완성된 커버를 들어봅니다",
         ].map((label, index) => (
           <li key={label} className="flex items-center gap-3 rounded-xl bg-card/60 px-4 py-3">
             <span className="tabular font-mono text-xs text-muted-foreground">

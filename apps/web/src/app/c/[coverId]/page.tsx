@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowRight, CircleNotch, Info } from "@phosphor-icons/react/dist/ssr";
+import { CircleNotch, Info } from "@phosphor-icons/react/dist/ssr";
 
 import { AiNotice } from "@/components/coverly/ai-notice";
 import { ResultPlayer } from "@/components/coverly/result-player";
@@ -10,10 +10,7 @@ import { SiteHeader } from "@/components/coverly/site-header";
 import { VoiceAvatar } from "@/components/coverly/voice-avatar";
 import type { Voice } from "@/lib/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { PREVIEW, PRICING } from "@/lib/config";
-import { formatKrw } from "@/lib/format";
+import { PREVIEW } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -108,25 +105,11 @@ export default async function CoverPage({ params }: PageProps<"/c/[coverId]">) {
             />
           </div>
 
-          <Card className="mt-4 gap-3 border-primary/30 bg-primary/5 p-5">
-              <div>
-                <h2 className="font-semibold">전체 곡으로 만들기</h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  지금은 {PREVIEW.durationSeconds}초 미리보기예요. 곡 전체를 같은 목소리로 완성할 수
-                  있습니다.
-                </p>
-              </div>
-              <Button size="lg" className="h-12 w-full text-base" disabled>
-                전체 곡 만들기 · {formatKrw(PRICING.fullCoverKrw)}
-              </Button>
-            <p className="text-center text-xs text-muted-foreground">결제 기능은 준비 중입니다</p>
-          </Card>
-
           <Alert className="mt-4">
             <Info className="size-4" aria-hidden />
             <AlertDescription className="leading-relaxed">
-              이 커버는 만든 사람만 볼 수 있습니다. 내려받은 파일을 외부에 올릴 때는 원곡의 권리
-              관계를 직접 확인해 주세요. 공개와 배포의 책임은 이용자에게 있습니다.
+              이 커버는 만든 사람만 들을 수 있습니다. 파일로 내려받거나 외부에 공유할 수는
+              없습니다.
             </AlertDescription>
           </Alert>
 

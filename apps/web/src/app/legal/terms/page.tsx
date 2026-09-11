@@ -27,10 +27,9 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-medium text-foreground">결과물의 사용</h2>
             <p className="mt-2">
-              Coverly는 생성된 커버를 공개 페이지에 게시하지 않습니다. 이용자는 결과물을 내려받아
-              보관하고 감상할 수 있습니다. 결과물을 외부에 공유하거나 배포하는 행위는 이용자의
-              판단과 책임으로 이루어지며, 이 경우 원곡의 저작권 및 저작인접권 관계를 이용자가 직접
-              확인해야 합니다.
+              Coverly는 생성된 커버를 공개 페이지에 게시하지 않으며, 결과물을 파일로 내려받거나
+              공유 링크로 전달하는 기능을 제공하지 않습니다. 결과물은 만든 이용자의 계정 안에서
+              감상하는 용도로만 제공됩니다.
             </p>
           </section>
 

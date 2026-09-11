@@ -72,8 +72,10 @@ export async function POST(request: NextRequest) {
   }
 
   // Free previews first, then credits. Paid full covers come in Phase 5.
-  // Checked against the account, not the request: the flag decides, the form only asks.
-  const full = wantsFull && profile.can_generate_full === true;
+  // Whole-song generation is switched off for everyone while the licensing question is open.
+  // Hiding the button is not enough on its own -- the request still arrives.
+  const full = false;
+  void wantsFull;
   const used = profile.free_generations_used ?? 0;
   // A per-account override exists so one tester can be given more without moving the limit for
   // everyone; null means the app-wide default applies.

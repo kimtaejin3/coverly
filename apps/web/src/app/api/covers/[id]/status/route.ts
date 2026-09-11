@@ -33,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext<"/api/
     .eq("cover_id", id)
     .maybeSingle();
 
-  // Sign the finished audio here so the workspace can play and download without a page change.
+  // Sign the finished audio here so the workspace can play it without a page change.
   let audioUrl: string | null = null;
   if (cover.status === "completed" && cover.result_url) {
     const { data } = await supabase.storage.from("covers").createSignedUrl(cover.result_url, 60 * 60);

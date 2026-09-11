@@ -38,12 +38,10 @@ export function Workspace({
   signedIn,
   recent,
   personalVoices,
-  canGenerateFull,
 }: {
   signedIn: boolean;
   recent: RecentCover[];
   personalVoices: PersonalVoice[];
-  canGenerateFull: boolean;
 }) {
   const router = useRouter();
   const params = useSearchParams();
@@ -336,9 +334,6 @@ export function Workspace({
       <div className="min-w-0 lg:border-l lg:border-border/60 lg:pl-10">
         <ResultPane
           state={paneState}
-          canGenerateFull={canGenerateFull}
-          makingFull={submitting}
-          onMakeFull={() => void startGeneration({ full: true })}
           onDone={(audioUrl) => {
             const id = coverId;
             setCoverId(null);

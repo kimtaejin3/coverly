@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * AI 기본법 (in force 2026-01-22) requires generated audio to be labelled where a person can see
- * it. This is the visible half; the downloadable file also carries it in metadata.
+ * it. The file itself carries the same label in its metadata.
  */
 export function AiNotice({ className }: { className?: string }) {
   return (

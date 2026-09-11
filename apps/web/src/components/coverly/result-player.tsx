@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { DownloadSimple, Pause, Play } from "@phosphor-icons/react";
+import { Pause, Play } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
 import { formatSeconds } from "@/lib/format";
@@ -79,26 +79,6 @@ export function ResultPlayer({ voice, title, durationSeconds, audioUrl }: Result
         />
       ) : null}
 
-      <div className="p-4">
-        <Button
-          variant="secondary"
-          className="w-full"
-          asChild={Boolean(audioUrl)}
-          disabled={!audioUrl}
-        >
-          {audioUrl ? (
-            <a href={audioUrl} download={`${title}.mp3`}>
-              <DownloadSimple className="size-4" aria-hidden />
-              다운로드
-            </a>
-          ) : (
-            <span>
-              <DownloadSimple className="size-4" aria-hidden />
-              다운로드
-            </span>
-          )}
-        </Button>
-      </div>
     </div>
   );
 }
