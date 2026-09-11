@@ -156,15 +156,26 @@ export function SongFinder({
                       tier === "transpose" && "font-mono tabular-nums text-muted-foreground",
                       tier === "unknown" && "text-muted-foreground/70",
                     )}
-                    title={TIER_HINT[tier]}
+                    title={
+                      tier === "strain" && shift
+                        ? `${TIER_HINT.strain} · ${shift}키 내리면 편해요`
+                        : TIER_HINT[tier]
+                    }
                   >
                     {tier === "comfort"
                       ? "편하게"
                       : tier === "strain"
-                        ? "고음 힘줘야"
+                        ? "힘줘야"
                         : tier === "transpose"
-                          ? `${Math.round(shift ?? 0)}키`
+                          ? `${shift}키`
                           : "미확인"}
+                    {/* The key that makes it easy, for the tier where the warning alone would
+                        leave someone stuck with their own throat as the answer. */}
+                    {tier === "strain" && shift ? (
+                      <span className="ml-1 font-mono tabular-nums text-muted-foreground">
+                        {shift}키
+                      </span>
+                    ) : null}
                   </span>
                 </li>
               ))}
@@ -172,9 +183,10 @@ export function SongFinder({
           )}
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-            노래방에서 부를 때 기준이에요. <span className="text-foreground">고음 힘줘야</span>는
-            낼 수는 있지만 후렴에서 무리가 가는 곡, 숫자는 내려야 하는 키 수입니다. AI 커버는 어떤
-            곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가 자연스러워요.
+            노래방에서 부를 때 기준이에요. <span className="text-amber-600 dark:text-amber-500">
+            힘줘야</span>는 낼 수는 있지만 후렴에서 무리가 가는 곡이고, 옆의 숫자만큼 키를 내리면
+            편해집니다. AI 커버는 어떤 곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가
+            자연스러워요.
           </p>
         </div>
       ) : null}

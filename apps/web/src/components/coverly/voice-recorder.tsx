@@ -34,8 +34,8 @@ const MIN_SECONDS = 30;
 /** Short enough to sit inside a <select> option without pushing the title off a phone screen. */
 function fitLabel(tier: Tier, shift: number | null): string {
   if (tier === "comfort") return "편하게";
-  if (tier === "strain") return "고음 힘줘야";
-  if (tier === "transpose") return `${Math.round(shift ?? 0)}키`;
+  if (tier === "strain") return shift ? `힘줘야 ${shift}키` : "고음 힘줘야";
+  if (tier === "transpose") return `${shift}키`;
   return "음역 미확인";
 }
 
