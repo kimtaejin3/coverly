@@ -21,30 +21,81 @@ const EMPTY: Meter = { level: 0, semitones: 0, lowHz: 0, highHz: 0 };
  * wastes the singer's time. Showing the range as they sing turns "낮은 키로 한 번, 높은 키로 한 번"
  * from an instruction into something they can watch themselves satisfy.
  */
-function detectPitch(buffer: Float32Array, sampleRate: number): number {
+/**
+ * YIN pitch detection.
+ *
+ * This was plain autocorrelation picking the highest peak, and it was wrong about nine notes in
+ * fifteen -- it read 196 Hz as 98 and 523 Hz as 75. Autocorrelation peaks at the period and again
+ * at every multiple of it, and the score here was divided by `length - lag`, which grows the score
+ * as the lag gets longer. That put a thumb on the scale for exactly the wrong peaks, so it kept
+ * picking a subharmonic: the note an octave or two below the one being sung.
+ *
+ * YIN's cumulative mean normalisation exists to solve that specific problem. The difference
+ * function is divided by the running mean of itself, which pushes the value at the true period
+ * below the values at its multiples instead of above them, and then the first dip under the
+ * threshold wins rather than the deepest one anywhere.
+ */
+export function detectPitch(buffer: Float32Array, sampleRate: number): number {
   let rms = 0;
   for (let i = 0; i < buffer.length; i += 1) rms += buffer[i] * buffer[i];
   rms = Math.sqrt(rms / buffer.length);
   if (rms < 0.01) return 0;
 
-  const minLag = Math.floor(sampleRate / 1000);
+  const minLag = Math.max(2, Math.floor(sampleRate / 1200));
   const maxLag = Math.min(Math.floor(sampleRate / 70), Math.floor(buffer.length / 2));
-  let bestLag = -1;
-  let bestScore = 0;
-  for (let lag = minLag; lag < maxLag; lag += 1) {
-    let sum = 0;
-    for (let i = 0; i < buffer.length - lag; i += 2) sum += buffer[i] * buffer[i + lag];
-    const score = sum / (buffer.length - lag);
-    if (score > bestScore) {
-      bestScore = score;
-      bestLag = lag;
+  if (maxLag <= minLag) return 0;
+
+  // Squared difference at each candidate period. Half the window is plenty for a pitch and keeps
+  // this inside a 100 ms frame on the main thread.
+  const window = Math.floor(buffer.length / 2);
+  const diff = new Float32Array(maxLag + 1);
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
+    let total = 0;
+    for (let i = 0; i < window; i += 1) {
+      const delta = buffer[i] - buffer[i + lag];
+      total += delta * delta;
+    }
+    diff[lag] = total;
+  }
+
+  // Cumulative mean normalised difference: d[lag] over the running mean of d up to lag.
+  const norm = new Float32Array(maxLag + 1);
+  let running = 0;
+  norm[minLag] = 1;
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
+    running += diff[lag];
+    norm[lag] = running > 0 ? (diff[lag] * (lag - minLag + 1)) / running : 1;
+  }
+
+  const THRESHOLD = 0.15;
+  let chosen = -1;
+  for (let lag = minLag + 1; lag < maxLag; lag += 1) {
+    if (norm[lag] < THRESHOLD) {
+      // Walk to the bottom of this dip rather than taking its leading edge.
+      while (lag + 1 < maxLag && norm[lag + 1] < norm[lag]) lag += 1;
+      chosen = lag;
+      break;
     }
   }
-  // A clear pitch correlates with itself far more strongly than noise does.
-  if (bestLag < 0 || bestScore < rms * rms * 0.3) return 0;
-  const f0 = sampleRate / bestLag;
-  return f0 > 70 && f0 < 1000 ? f0 : 0;
+  if (chosen < 0) {
+    // Nothing crossed the threshold. Take the best dip anyway, but only if it is convincing --
+    // otherwise this is noise and the caller should hear silence, not a guess.
+    let best = minLag + 1;
+    for (let lag = minLag + 1; lag < maxLag; lag += 1) if (norm[lag] < norm[best]) best = lag;
+    if (norm[best] > 0.6) return 0;
+    chosen = best;
+  }
+
+  // Parabolic interpolation around the dip: a lag is an integer number of samples, and at 500 Hz
+  // one sample is already a third of a semitone.
+  const a = norm[chosen - 1];
+  const b = norm[chosen];
+  const c = norm[chosen + 1] ?? b;
+  const shift = a + c - 2 * b !== 0 ? (a - c) / (2 * (a + c - 2 * b)) : 0;
+  const f0 = sampleRate / (chosen + shift);
+  return f0 > 70 && f0 < 1200 ? f0 : 0;
 }
+
 
 export function useVoiceMeter() {
   const [meter, setMeter] = useState<Meter>(EMPTY);
