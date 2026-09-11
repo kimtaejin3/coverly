@@ -20,7 +20,7 @@ async function loadPersonalVoices(): Promise<PersonalVoice[]> {
     .select(
       "id, name, status, error_message, training_progress, training_stage, " +
         "f0_low, f0_median, f0_high, f0_peak, " +
-        "f0_comfort_high, f0_absolute_high, f0_train_high",
+        "f0_comfort_high, f0_absolute_high, f0_modal_high, f0_falsetto_high, f0_train_high",
     )
     // Excluding the catalogue leaves only rows the "owner reads own voices" policy allows,
     // so this can only ever return the caller's own voices.

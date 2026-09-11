@@ -264,12 +264,17 @@ export function Workspace({
               comfortHigh={
                 selectedPersonal?.f0_comfort_high ?? personalVoices[0]?.f0_comfort_high ?? null
               }
-              absoluteHigh={
+              modalHigh={
+                selectedPersonal?.f0_modal_high ??
+                personalVoices[0]?.f0_modal_high ??
                 selectedPersonal?.f0_absolute_high ??
                 personalVoices[0]?.f0_absolute_high ??
                 selectedPersonal?.f0_peak ??
                 personalVoices[0]?.f0_peak ??
                 null
+              }
+              falsettoHigh={
+                selectedPersonal?.f0_falsetto_high ?? personalVoices[0]?.f0_falsetto_high ?? null
               }
             />
           </div>

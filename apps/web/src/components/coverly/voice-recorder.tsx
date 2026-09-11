@@ -85,7 +85,9 @@ export function VoiceRecorder({
   }, []);
 
   const comfortHigh = scale?.comfortHz || null;
-  const absoluteHigh = scale?.topHz || null;
+  // 진성 ceiling, not the whole reach: a song's 최고음 is a 진성 note, so ranking practice songs
+  // against a falsetto top would hand someone a take they cannot actually sing in chest.
+  const modalHigh = scale?.modalTopHz || null;
 
   /** Practice songs ordered around this singer, once there is a measurement to order them by. */
   const ranked = useMemo(() => {
@@ -94,9 +96,9 @@ export function VoiceRecorder({
     );
     const scored = PRACTICE_SONGS.map((item) => ({
       song: item,
-      ...classifyFit(peaks.get(songKey(item.title, item.artist)) ?? null, comfortHigh, absoluteHigh),
+      ...classifyFit(peaks.get(songKey(item.title, item.artist)) ?? null, comfortHigh, modalHigh),
     }));
-    if (!absoluteHigh) return scored;
+    if (!modalHigh) return scored;
     const group = (pin?: "first" | "last") => (pin === "first" ? -1 : pin === "last" ? 1 : 0);
     return [...scored].sort(
       (a, b) =>
@@ -104,15 +106,15 @@ export function VoiceRecorder({
         TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
         Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
     );
-  }, [ranges, comfortHigh, absoluteHigh]);
+  }, [ranges, comfortHigh, modalHigh]);
 
   // The best fit is the useful default once we know the range. Before that, the hand-ordered list
   // stands and its first entry is the pick-your-own option.
   useEffect(() => {
-    if (picked || !absoluteHigh) return;
+    if (picked || !modalHigh) return;
     const best = ranked.find((item) => item.song.pin !== "first" && item.tier !== "unknown");
     if (best) setSongId(best.song.id);
-  }, [ranked, picked, absoluteHigh]);
+  }, [ranked, picked, modalHigh]);
 
   const song = PRACTICE_SONGS.find((item) => item.id === songId) ?? PRACTICE_SONGS[0];
 
@@ -279,9 +281,16 @@ export function VoiceRecorder({
           <span className="text-muted-foreground">
             편한 한계{" "}
             <span className="font-medium text-foreground">{noteName(scale.comfortHz)}</span>
-            {scale.topHz > scale.comfortHz ? (
+            {scale.modalTopHz > scale.comfortHz ? (
               <>
-                {" · "}최고 <span className="font-medium text-foreground">{noteName(scale.topHz)}</span>
+                {" · "}진성{" "}
+                <span className="font-medium text-foreground">{noteName(scale.modalTopHz)}</span>
+              </>
+            ) : null}
+            {scale.topHz > scale.modalTopHz ? (
+              <>
+                {" · "}가성{" "}
+                <span className="font-medium text-foreground">{noteName(scale.topHz)}</span>
               </>
             ) : null}
           </span>
@@ -323,7 +332,7 @@ export function VoiceRecorder({
           {ranked.map(({ song: item, tier, shift }) => (
             <option key={item.id} value={item.id}>
               {item.artist === "직접 고르기" ? item.title : `${item.title} — ${item.artist}`}
-              {absoluteHigh && !item.pin ? ` · ${fitLabel(tier, shift)}` : ""}
+              {modalHigh && !item.pin ? ` · ${fitLabel(tier, shift)}` : ""}
             </option>
           ))}
         </select>

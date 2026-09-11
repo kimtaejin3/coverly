@@ -9,7 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 const VOICE_FIELDS =
   "id, name, status, error_message, training_progress, training_stage, " +
   "f0_low, f0_median, f0_high, f0_peak, " +
-  "f0_comfort_high, f0_absolute_high, f0_train_high, train_count, created_at";
+  "f0_comfort_high, f0_absolute_high, f0_modal_high, f0_falsetto_high, " +
+  "f0_train_high, train_count, created_at";
 
 /** Deterministic id for one training run, shared by the charge and any later refund. */
 export function trainingRunRef(voiceId: string, run: number): string {

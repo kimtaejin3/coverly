@@ -26,10 +26,14 @@ interface Ranked {
 
 export function SongFinder({
   comfortHigh,
-  absoluteHigh,
+  modalHigh,
+  falsettoHigh,
 }: {
   comfortHigh: number | null;
-  absoluteHigh: number | null;
+  /** 진성 ceiling. Matching compares to this because song 최고음 is 진성 in 77 of 78 rows. */
+  modalHigh: number | null;
+  /** 가성 ceiling. Shown as a footnote -- taking a chorus in falsetto is a real thing people do. */
+  falsettoHigh: number | null;
 }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
   const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
@@ -48,15 +52,15 @@ export function SongFinder({
     const filtered = genre === "전체" ? songs : songs.filter((s) => s.genre === genre);
     const scored = filtered.map((song) => ({
       song,
-      ...classifyFit(song.f0_peak, comfortHigh, absoluteHigh),
+      ...classifyFit(song.f0_peak, comfortHigh, modalHigh),
     }));
-    if (!absoluteHigh) return scored;
+    if (!modalHigh) return scored;
     return [...scored].sort(
       (a, b) =>
         TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
         Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
     );
-  }, [songs, genre, comfortHigh, absoluteHigh]);
+  }, [songs, genre, comfortHigh, modalHigh]);
 
   const counts = useMemo(() => {
     const out = { comfort: 0, strain: 0 };
@@ -86,14 +90,14 @@ export function SongFinder({
 
       {open ? (
         <div className="space-y-2.5 border-t border-border/60 px-3 py-3">
-          {absoluteHigh ? (
+          {modalHigh ? (
             <p className="text-xs leading-relaxed text-muted-foreground">
               {comfortHigh ? (
                 <>
                   편한 한계{" "}
                   <span className="font-medium text-foreground">{noteName(comfortHigh)}</span>
-                  {" · "}최고{" "}
-                  <span className="font-medium text-foreground">{noteName(absoluteHigh)}</span>
+                  {" · "}진성 최고{" "}
+                  <span className="font-medium text-foreground">{noteName(modalHigh)}</span>
                   {" 기준이에요. "}
                   {counts.comfort > 0 ? `편하게 부를 수 있는 곡이 ${counts.comfort}곡` : null}
                   {counts.comfort > 0 && counts.strain > 0 ? ", " : null}
@@ -103,7 +107,7 @@ export function SongFinder({
               ) : (
                 <>
                   내가 낸 가장 높은 음{" "}
-                  <span className="font-medium text-foreground">{noteName(absoluteHigh)}</span> 기준
+                  <span className="font-medium text-foreground">{noteName(modalHigh)}</span> 기준
                   이에요. 음역대를 재면 편하게 부를 수 있는 곡까지 갈라서 보여드려요.
                 </>
               )}
@@ -181,6 +185,14 @@ export function SongFinder({
               ))}
             </ul>
           )}
+
+          {falsettoHigh ? (
+            <p className="rounded-lg bg-secondary/50 px-2.5 py-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
+              가성으로는 <span className="font-medium text-foreground">{noteName(falsettoHigh)}</span>
+              까지 올라가요. 위 순서는 진성 기준이라, 후렴만 가성으로 넘기면 더 높은 곡도
+              부를 수 있습니다.
+            </p>
+          ) : null}
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
             노래방에서 부를 때 기준이에요. <span className="text-amber-600 dark:text-amber-500">

@@ -48,13 +48,27 @@ const FRAME_MS = 100;
 const TOLERANCE_CENTS = 150;
 /** After this long on one note, stop asking and offer the exit. */
 const STRUGGLE_MS = 6000;
+/**
+ * How far H1-H2 has to rise above the low notes before we call it falsetto.
+ *
+ * Falsetto's glottal flow is close to a sine, so the harmonics above the fundamental collapse and
+ * H1 pulls away from H2 -- measured at +1.8 dB in chest and +13.5 dB in falsetto on synthesised
+ * vowels. The comparison is against this singer's own low notes rather than a fixed number,
+ * because the baseline moves with the microphone and the voice.
+ *
+ * This is the live indicator only. The worker re-derives the split from the audio and that is the
+ * value anything is decided on.
+ */
+const FALSETTO_JUMP_DB = 8;
 
 export interface ScaleResult {
   blob: Blob;
   /** The tone that was sounding when they said it had started to hurt. */
   comfortHz: number;
-  /** Highest step they actually reached. The worker measures the real one from the audio. */
+  /** Highest step they actually reached, falsetto included. */
   topHz: number;
+  /** Highest step reached before the voice flipped into falsetto, for ranking songs right away. */
+  modalTopHz: number;
 }
 
 function pickMimeType(): string | undefined {
@@ -65,6 +79,22 @@ function pickMimeType(): string | undefined {
 }
 
 const cents = (hz: number, target: number) => 1200 * Math.log2(hz / target);
+
+/** First harmonic minus second, in dB, read straight off the analyser's spectrum. */
+function h1MinusH2(spectrum: Float32Array, binHz: number, f0: number): number {
+  const peakNear = (target: number) => {
+    const half = Math.max(binHz, target * 0.06);
+    let best = -Infinity;
+    const from = Math.max(0, Math.floor((target - half) / binHz));
+    const to = Math.min(spectrum.length - 1, Math.ceil((target + half) / binHz));
+    for (let i = from; i <= to; i += 1) best = Math.max(best, spectrum[i]);
+    return best;
+  };
+  const h1 = peakNear(f0);
+  const h2 = peakNear(f0 * 2);
+  // getFloatFrequencyData is already in dB, so the difference is the measure.
+  return Number.isFinite(h1) && Number.isFinite(h2) ? h1 - h2 : 0;
+}
 
 type Phase = "idle" | "calibrate" | "tone" | "listen" | "saving";
 
@@ -83,6 +113,7 @@ export function ScaleTest({
   const [quiet, setQuiet] = useState(false);
   const [struggling, setStruggling] = useState(false);
   const [comfortHz, setComfortHz] = useState(0);
+  const [falsetto, setFalsetto] = useState(false);
 
   const contextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -102,6 +133,11 @@ export function ScaleTest({
   const reachedRef = useRef(0);
   const calibrationRef = useRef<number[]>([]);
   const doneRef = useRef(false);
+  const h1h2Ref = useRef(0);
+  /** H1-H2 of each completed step, in order. The first few set this singer's chest baseline. */
+  const baselineRef = useRef<number[]>([]);
+  const modalTopRef = useRef(0);
+  const falsettoRef = useRef(false);
 
   const stopEverything = useCallback(() => {
     doneRef.current = true;
@@ -155,6 +191,7 @@ export function ScaleTest({
         blob,
         comfortHz: comfortRef.current,
         topHz: reachedRef.current || comfortRef.current,
+        modalTopHz: modalTopRef.current || reachedRef.current || comfortRef.current,
       });
     };
     if (recorder.state === "paused") recorder.resume();
@@ -207,6 +244,20 @@ export function ScaleTest({
     setQuiet(level < 0.01);
     setHeard(hz);
 
+    if (hz > 0) {
+      const spectrum = new Float32Array(analyser.frequencyBinCount);
+      analyser.getFloatFrequencyData(spectrum);
+      h1h2Ref.current = h1MinusH2(spectrum, context.sampleRate / analyser.fftSize, hz);
+      const baseline = baselineRef.current;
+      if (baseline.length >= 2) {
+        const sorted = [...baseline].sort((a, b) => a - b);
+        const chest = sorted[Math.floor(sorted.length / 2)];
+        const flipped = h1h2Ref.current - chest > FALSETTO_JUMP_DB;
+        falsettoRef.current = flipped;
+        setFalsetto(flipped);
+      }
+    }
+
     if (phaseRef.current === "calibrate") {
       // A held note, not twelve detections gathered whenever. Accumulating every frame that
       // happened to yield a pitch meant a quiet room crept towards the threshold on its own --
@@ -249,6 +300,10 @@ export function ScaleTest({
       setHold(holdRef.current);
       if (holdRef.current >= HOLD_FRAMES) {
         reachedRef.current = target;
+        // The first steps are the low ones, sung in chest by definition -- they are the baseline
+        // everything above gets measured against.
+        if (baselineRef.current.length < 3) baselineRef.current.push(h1h2Ref.current);
+        if (!falsettoRef.current) modalTopRef.current = target;
         if (timerRef.current) clearTimeout(timerRef.current);
         ask(stepRef.current + 1);
       }
@@ -401,6 +456,13 @@ export function ScaleTest({
           </>
         ) : null}
       </div>
+
+      {falsetto ? (
+        <p className="rounded-lg bg-secondary/60 px-3 py-2 text-center text-xs leading-relaxed text-muted-foreground">
+          지금부터 <span className="font-medium text-foreground">가성</span>으로 들려요. 계속
+          올라가도 되지만, 곡 추천은 진성 기준으로 해드립니다.
+        </p>
+      ) : null}
 
       {comfortHz > 0 ? (
         <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">

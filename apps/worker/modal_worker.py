@@ -334,12 +334,18 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
                 range_columns = {
                     "f0_comfort_high": round(scale.comfort_high, 2),
                     "f0_absolute_high": round(scale.absolute_high, 2),
+                    # Falsetto is a different instrument played by the same person. Songs ask for
+                    # 진성 almost without exception, so that is the ceiling matching compares to.
+                    "f0_modal_high": round(scale.modal_high or scale.absolute_high, 2),
+                    "f0_falsetto_high": round(scale.falsetto_high, 2) or None,
                     "f0_train_high": round(train_high, 2),
                 }
             else:
                 range_columns = {
                     "f0_comfort_high": round(stats.f0_high, 2),
                     "f0_absolute_high": round(stats.f0_peak, 2),
+                    "f0_modal_high": round(stats.f0_peak, 2),
+                    "f0_falsetto_high": None,
                     "f0_train_high": round(stats.f0_peak, 2),
                 }
 

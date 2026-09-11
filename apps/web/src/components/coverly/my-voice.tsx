@@ -25,8 +25,12 @@ export interface PersonalVoice {
   f0_peak: number | null;
   /** Comfortable ceiling, marked by the singer on the scale take. */
   f0_comfort_high: number | null;
-  /** Reached with strain or falsetto. What we show, and the top of what we will recommend. */
+  /** Reached with strain or falsetto. The whole of what came out, for the gauge. */
   f0_absolute_high: number | null;
+  /** Highest note in 진성. What song matching compares against -- songs ask for 진성. */
+  f0_modal_high: number | null;
+  /** Highest note in 가성, when they used it at all. Shown, never matched on. */
+  f0_falsetto_high: number | null;
   /** What the fine-tune actually saw. A model fact, not a throat fact -- the key decision reads it. */
   f0_train_high: number | null;
 }

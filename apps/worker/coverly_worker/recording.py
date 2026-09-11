@@ -26,6 +26,14 @@ MIN_NOTE_SECONDS = 0.28
 # 지속음이라면 안정 구간의 f0 가 이 범위 안에 머문다. 넘으면 글리산도이거나 추적 실패다.
 MAX_NOTE_WOBBLE_SEMITONES = 1.2
 
+# 진성에서 가성으로 넘어가면 H1-H2 가 이만큼은 뛴다.
+#
+# 가성은 성문 파형이 정현파에 가까워서 기음만 남고 배음이 죽는다 -- 그래서 H1 이 H2 보다
+# 커지고, 스펙트럼 기울기도 -12 dB/oct 근처(진성)에서 -18 정도로 가팔라진다. 절대 임계값을
+# 쓰지 않는 이유는 마이크와 목소리마다 기준선이 다르기 때문이다. 한 사람의 한 번의 스케일
+# 안에서 '아래쪽 음들 대비 얼마나 뛰었나'를 보면 기기와 개인차가 상쇄된다.
+PASSAGGIO_H1H2_JUMP_DB = 8.0
+
 
 @dataclass
 class RecordingStats:
@@ -50,6 +58,10 @@ class Note:
     start: float
     end: float
     hz: float
+    #: First minus second harmonic, in dB. Rises sharply when a singer flips into falsetto.
+    h1_h2_db: float = 0.0
+    #: "modal"(진성) or "falsetto"(가성). Decided across the take, not note by note.
+    register: str = "modal"
 
 
 @dataclass
@@ -61,9 +73,73 @@ class ScaleStats:
     comfort_high: float
     #: 가성과 성대 긴장을 포함해 실제로 낸 가장 높은 지속음.
     absolute_high: float
+    #: 진성으로 낸 가장 높은 음.
+    #:
+    #: 곡 DB 의 최고음은 78곡 중 77곡이 진성 기준이다. 가성이 섞인 천장과 비교하면 가성으로만
+    #: 닿는 음을 진성으로 부를 수 있다고 말하게 된다 -- 매칭에 써야 하는 건 이 값이다.
+    modal_high: float = 0.0
+    #: 가성으로 낸 가장 높은 음. 보여주는 값이지 매칭 기준이 아니다.
+    falsetto_high: float = 0.0
 
 
-def _segment_notes(f0: np.ndarray, times: np.ndarray, voiced: np.ndarray) -> list[Note]:
+def _h1_h2_db(segment: np.ndarray, sr: int, f0: float) -> float:
+    """First harmonic minus second, in dB, over one held note.
+
+    The pair is read straight off the magnitude spectrum at f0 and 2*f0 rather than from a source
+    model. A sung vowel held for half a second gives a clean enough peak at both, and what matters
+    here is the *change* across a take, not an absolute voice-quality figure.
+    """
+    if segment.size < 256 or f0 <= 0:
+        return 0.0
+    windowed = segment * np.hanning(segment.size)
+    spectrum = np.abs(np.fft.rfft(windowed))
+    freqs = np.fft.rfftfreq(segment.size, 1.0 / sr)
+    if freqs.size < 2:
+        return 0.0
+
+    def peak_near(target: float) -> float:
+        # Widen with the harmonic: pitch drifts a little over a held note, and the second harmonic
+        # drifts twice as far in Hz.
+        half = max(freqs[1], target * 0.06)
+        band = (freqs >= target - half) & (freqs <= target + half)
+        return float(spectrum[band].max()) if band.any() else 0.0
+
+    h1, h2 = peak_near(f0), peak_near(2.0 * f0)
+    if h1 <= 0 or h2 <= 0:
+        return 0.0
+    return float(20.0 * np.log10(h1 / h2))
+
+
+def _split_registers(notes: list[Note]) -> None:
+    """Mark where the voice flips into falsetto, in place.
+
+    Walks up the take looking for the biggest jump in H1-H2 against the notes below it. A singer
+    crosses the passaggio once, going up, and everything above it stays there -- so this is one
+    decision about where the break is, not a vote on every note. Judging notes independently would
+    scatter 진성 and 가성 through each other wherever one note happened to be breathy.
+    """
+    if len(notes) < 3:
+        return
+    ordered = sorted(notes, key=lambda n: n.hz)
+    values = [n.h1_h2_db for n in ordered]
+    best_index, best_jump = -1, 0.0
+    # Means, not medians. A median ignores what you put into it -- dropping two falsetto notes into
+    # the lower group left it reading the same, so every later split scored as well as the real one
+    # and the last note won by rounding. A mean makes that contamination cost something, which is
+    # the whole point of choosing where the line goes.
+    for index in range(2, len(ordered)):
+        below = float(np.mean(values[:index]))
+        above = float(np.mean(values[index:]))
+        if above - below > best_jump:
+            best_index, best_jump = index, above - below
+    if best_index < 0 or best_jump < PASSAGGIO_H1H2_JUMP_DB:
+        return
+    for note in ordered[best_index:]:
+        note.register = "falsetto"
+
+
+def _segment_notes(f0: np.ndarray, times: np.ndarray, voiced: np.ndarray,
+                   y: np.ndarray, sr: int) -> list[Note]:
     """Held notes, in the order they were sung.
 
     A scale is structured in a way a song is not: the singer stops on each step. That structure is
@@ -93,7 +169,11 @@ def _segment_notes(f0: np.ndarray, times: np.ndarray, voiced: np.ndarray) -> lis
         wobble = 12.0 * float(np.log2(core.max() / core.min())) if core.min() > 0 else 99.0
         if wobble > MAX_NOTE_WOBBLE_SEMITONES:
             continue
-        notes.append(Note(float(times[start]), float(times[index - 1]), hz))
+        # Read the harmonics off the same stable middle the pitch came from, not the onset.
+        begin, finish = float(times[start]), float(times[index - 1])
+        inset = (finish - begin) / 5.0
+        segment = y[int((begin + inset) * sr):int((finish - inset) * sr)]
+        notes.append(Note(begin, finish, hz, _h1_h2_db(segment, sr, hz)))
     return notes
 
 
@@ -115,18 +195,23 @@ def analyse_scale(path: Path, comfort_hz: float = 0.0) -> ScaleStats:
     )
     times = librosa.times_like(f0, sr=sr, hop_length=hop)
     voiced = np.isfinite(f0) & voiced_flag
-    notes = _segment_notes(f0, times, voiced)
+    notes = _segment_notes(f0, times, voiced, y, sr)
 
     if not notes:
         return ScaleStats(duration, [], 0.0, 0.0, 0.0)
 
+    _split_registers(notes)
     pitches = [note.hz for note in notes]
     low = min(pitches)
     absolute = max(pitches)
+    modal = [n.hz for n in notes if n.register == "modal"]
+    falsetto = [n.hz for n in notes if n.register == "falsetto"]
     # The singer can stop before straining, so comfort is normally below the top note. Trust the
     # marker, but it cannot sit above a note that was never reached.
     comfort = min(comfort_hz, absolute) if comfort_hz > 0 else absolute
-    return ScaleStats(duration, notes, low, comfort, absolute)
+    return ScaleStats(duration, notes, low, comfort, absolute,
+                      max(modal) if modal else 0.0,
+                      max(falsetto) if falsetto else 0.0)
 
 
 def scale_windows(stats: ScaleStats, total_seconds: float, ceiling_hz: float = 0.0
@@ -136,7 +221,10 @@ def scale_windows(stats: ScaleStats, total_seconds: float, ceiling_hz: float = 0
     Notes above `ceiling_hz` are dropped. Past the comfort marker the singer is straining, and a
     model fine-tuned on that learns the strain as part of who they are.
     """
-    usable = [n for n in stats.notes if ceiling_hz <= 0 or n.hz <= ceiling_hz * 1.03]
+    # Falsetto is left out of the reference clip entirely. It is a different timbre from the same
+    # person, and a clip that mixes the two teaches the model to blur them together.
+    usable = [n for n in stats.notes
+              if n.register == "modal" and (ceiling_hz <= 0 or n.hz <= ceiling_hz * 1.03)]
     if not usable:
         return []
     usable.sort(key=lambda n: n.hz)
