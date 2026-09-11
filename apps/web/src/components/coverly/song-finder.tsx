@@ -9,8 +9,6 @@ import { classifyFit, TIER_HINT, TIER_ORDER, type Tier } from "@/lib/range";
 import { ResponsiveModal } from "@/components/ui/responsive-modal";
 import { cn } from "@/lib/utils";
 
-const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
-
 /**
  * Which songs this voice can actually sing, and how.
  *
@@ -45,7 +43,6 @@ export function SongFinder({
   onOpenChange: (next: boolean) => void;
 }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
-  const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
 
   useEffect(() => {
     // Fetched up front now, not on open: the trigger row shows a count, so the number has to be
@@ -59,8 +56,7 @@ export function SongFinder({
 
   const ranked = useMemo((): Ranked[] => {
     if (!songs) return [];
-    const filtered = genre === "전체" ? songs : songs.filter((s) => s.genre === genre);
-    const scored = filtered.map((song) => ({
+    const scored = songs.map((song) => ({
       song,
       ...classifyFit(song.f0_peak, comfortHigh, modalHigh),
     }));
@@ -70,7 +66,7 @@ export function SongFinder({
         TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
         Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
     );
-  }, [songs, genre, comfortHigh, modalHigh]);
+  }, [songs, comfortHigh, modalHigh]);
 
   const counts = useMemo(() => {
     const out = { comfort: 0, strain: 0 };
@@ -149,25 +145,6 @@ export function SongFinder({
               ) : null}
             </p>
           ) : null}
-
-          {/* Sticky so the filter stays reachable after scrolling into the hundreds. */}
-          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-1 bg-popover px-1 pb-1">
-            {GENRES.map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setGenre(g)}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-xs transition-colors",
-                  genre === g
-                    ? "bg-primary/15 font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-secondary",
-                )}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
 
           {songs === null ? (
             <p className="py-6 text-center text-xs text-muted-foreground">불러오는 중…</p>
