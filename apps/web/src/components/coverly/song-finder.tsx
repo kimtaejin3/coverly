@@ -10,15 +10,43 @@ import { cn } from "@/lib/utils";
 const GENRES = ["전체", "발라드", "모던록", "록", "팝"] as const;
 
 /**
- * Songs ranked by how little transposing they need to reach the owner's voice.
+ * Which songs this voice can actually sing, and how.
  *
- * "Fits my range" is the wrong question here, because the pipeline transposes every song into
- * range anyway. What actually varies is how far it has to move: rubberband smears an instrumental
- * the further it is stretched, and the model sounds most like itself near the register it was
- * trained on. So the ranking is by distance from the singer's median, not by whether they can
- * reach the original key.
+ * The question was never "does it fit" — the cover pipeline transposes anything into range. It is
+ * what a singer standing in a 노래방 needs: can I hold this, or do I have to squeeze for the
+ * chorus, or should I just drop the key.
+ *
+ * Answering that takes two ceilings, not one. Against a single number the middle case disappears,
+ * and the middle case is most of the interesting songs: 공허해 came back as two semitones away,
+ * which was true of the average note and wrong about the ones that matter.
  */
-export function SongFinder({ voicePeak }: { voicePeak: number | null }) {
+type Tier = "comfort" | "strain" | "transpose" | "unknown";
+
+const TIER_ORDER: Record<Tier, number> = { comfort: 0, strain: 1, transpose: 2, unknown: 3 };
+
+interface Ranked {
+  song: SongRange;
+  tier: Tier;
+  /** Semitones to drop before it sits in the comfortable range. Only set for `transpose`. */
+  shift: number | null;
+}
+
+function classify(song: SongRange, comfortHigh: number | null, absoluteHigh: number | null): Ranked {
+  if (!song.f0_peak || !absoluteHigh) return { song, tier: "unknown", shift: null };
+  if (comfortHigh && song.f0_peak <= comfortHigh) return { song, tier: "comfort", shift: null };
+  if (song.f0_peak <= absoluteHigh) return { song, tier: "strain", shift: null };
+  // Target the comfortable ceiling, not the absolute one: a key you can only just reach is not a
+  // key you want to be handed in front of other people.
+  return { song, tier: "transpose", shift: semitonesBetween(song.f0_peak, comfortHigh || absoluteHigh) };
+}
+
+export function SongFinder({
+  comfortHigh,
+  absoluteHigh,
+}: {
+  comfortHigh: number | null;
+  absoluteHigh: number | null;
+}) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
   const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
   const [open, setOpen] = useState(false);
@@ -31,19 +59,26 @@ export function SongFinder({ voicePeak }: { voicePeak: number | null }) {
       .catch(() => setSongs([]));
   }, [open, songs]);
 
-  // One shape either way, so the list does not have to know whether a voice exists yet.
-  const ranked = useMemo((): { song: SongRange; shift: number | null }[] => {
+  const ranked = useMemo((): Ranked[] => {
     if (!songs) return [];
     const filtered = genre === "전체" ? songs : songs.filter((s) => s.genre === genre);
-    // Peak against peak. Comparing a song's highest note to a singer's *comfortable* ceiling is
-    // what made 공허해 read as two semitones away while its actual high notes were out of reach.
-    const scored = filtered.map((song) => ({
-      song,
-      shift: voicePeak && song.f0_peak ? semitonesBetween(song.f0_peak, voicePeak) : null,
-    }));
-    if (!voicePeak) return scored;
-    return [...scored].sort((a, b) => Math.abs(a.shift ?? 99) - Math.abs(b.shift ?? 99));
-  }, [songs, genre, voicePeak]);
+    const scored = filtered.map((song) => classify(song, comfortHigh, absoluteHigh));
+    if (!absoluteHigh) return scored;
+    return [...scored].sort(
+      (a, b) =>
+        TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
+        Math.abs(a.shift ?? 0) - Math.abs(b.shift ?? 0),
+    );
+  }, [songs, genre, comfortHigh, absoluteHigh]);
+
+  const counts = useMemo(() => {
+    const out = { comfort: 0, strain: 0 };
+    for (const item of ranked) {
+      if (item.tier === "comfort") out.comfort += 1;
+      if (item.tier === "strain") out.strain += 1;
+    }
+    return out;
+  }, [ranked]);
 
   return (
     <div className="rounded-xl border border-border bg-card/50">
@@ -64,11 +99,27 @@ export function SongFinder({ voicePeak }: { voicePeak: number | null }) {
 
       {open ? (
         <div className="space-y-2.5 border-t border-border/60 px-3 py-3">
-          {voicePeak ? (
-            <p className="text-xs text-muted-foreground">
-              내가 낸 가장 높은 음{" "}
-              <span className="font-medium text-foreground">{noteName(voicePeak)}</span> 과(와) 곡의
-              최고음을 견줘, 키를 적게 옮겨도 되는 순서예요.
+          {absoluteHigh ? (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {comfortHigh ? (
+                <>
+                  편한 한계{" "}
+                  <span className="font-medium text-foreground">{noteName(comfortHigh)}</span>
+                  {" · "}최고{" "}
+                  <span className="font-medium text-foreground">{noteName(absoluteHigh)}</span>
+                  {" 기준이에요. "}
+                  {counts.comfort > 0 ? `편하게 부를 수 있는 곡이 ${counts.comfort}곡` : null}
+                  {counts.comfort > 0 && counts.strain > 0 ? ", " : null}
+                  {counts.strain > 0 ? `힘주면 되는 곡이 ${counts.strain}곡` : null}
+                  {counts.comfort > 0 || counts.strain > 0 ? " 있어요." : null}
+                </>
+              ) : (
+                <>
+                  내가 낸 가장 높은 음{" "}
+                  <span className="font-medium text-foreground">{noteName(absoluteHigh)}</span> 기준
+                  이에요. 음역대를 재면 편하게 부를 수 있는 곡까지 갈라서 보여드려요.
+                </>
+              )}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -98,7 +149,7 @@ export function SongFinder({ voicePeak }: { voicePeak: number | null }) {
             <p className="py-2 text-xs text-muted-foreground">불러오는 중…</p>
           ) : (
             <ul className="scroll-subtle max-h-64 space-y-0.5 overflow-y-auto pr-1">
-              {ranked.map(({ song, shift }) => (
+              {ranked.map(({ song, tier, shift }) => (
                 <li
                   key={`${song.artist}-${song.title}`}
                   className="flex items-center gap-2 rounded-lg px-1.5 py-1.5"
@@ -108,30 +159,43 @@ export function SongFinder({ voicePeak }: { voicePeak: number | null }) {
                     <span className="block truncate text-xs text-muted-foreground">
                       {song.artist}
                       {song.top_note ? ` · 최고음 ${song.top_note}` : ""}
-                      {song.f0_peak ? "" : " · 최고음 미확인"}
                     </span>
                   </span>
-                  {shift !== null ? (
-                    <span
-                      className={cn(
-                        "shrink-0 font-mono text-xs tabular-nums",
-                        Math.abs(shift) <= 3 ? "text-primary" : "text-muted-foreground",
-                      )}
-                      title="이만큼 키를 옮겨서 만들어요"
-                    >
-                      {shift > 0 ? "+" : ""}
-                      {Math.round(shift)}
-                    </span>
-                  ) : null}
+                  <span
+                    className={cn(
+                      "shrink-0 text-xs whitespace-nowrap",
+                      tier === "comfort" && "font-medium text-primary",
+                      tier === "strain" && "text-amber-600 dark:text-amber-500",
+                      tier === "transpose" && "font-mono tabular-nums text-muted-foreground",
+                      tier === "unknown" && "text-muted-foreground/70",
+                    )}
+                    title={
+                      tier === "comfort"
+                        ? "편한 음역 안에 들어와요"
+                        : tier === "strain"
+                          ? "낼 수는 있지만 고음에서 힘을 써야 해요"
+                          : tier === "transpose"
+                            ? "이만큼 키를 내리면 편하게 불러요"
+                            : "아직 최고음을 모르는 곡이에요"
+                    }
+                  >
+                    {tier === "comfort"
+                      ? "편하게"
+                      : tier === "strain"
+                        ? "고음 힘줘야"
+                        : tier === "transpose"
+                          ? `${Math.round(shift ?? 0)}키`
+                          : "미확인"}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
 
           <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-            숫자는 옮길 반음 수예요. 어떤 곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가
-            자연스럽습니다. &lsquo;음역 미확인&rsquo;은 아직 최고음을 모르는 곡이라 순서에서
-            뒤로 갑니다 &mdash; 누군가 그 곡으로 커버를 만들면 실측이 채워집니다.
+            노래방에서 부를 때 기준이에요. <span className="text-foreground">고음 힘줘야</span>는
+            낼 수는 있지만 후렴에서 무리가 가는 곡, 숫자는 내려야 하는 키 수입니다. AI 커버는 어떤
+            곡이든 자동으로 맞춰 주지만, 적게 옮길수록 목소리가 자연스러워요.
           </p>
         </div>
       ) : null}

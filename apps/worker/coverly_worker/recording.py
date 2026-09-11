@@ -20,6 +20,12 @@ MIN_VOICED_RATIO = 0.20
 MIN_RMS_DB = -42.0
 MIN_DURATION = 25.0
 
+# 스케일 녹음: 한 음을 이만큼은 끌어야 "낸 음"으로 인정한다. 스쳐 지나간 프레임과
+# pyin 의 옥타브 오류를 여기서 거른다.
+MIN_NOTE_SECONDS = 0.28
+# 지속음이라면 안정 구간의 f0 가 이 범위 안에 머문다. 넘으면 글리산도이거나 추적 실패다.
+MAX_NOTE_WOBBLE_SEMITONES = 1.2
+
 
 @dataclass
 class RecordingStats:
@@ -36,6 +42,121 @@ class RecordingStats:
     span_semitones: float
     times: np.ndarray
     f0: np.ndarray
+
+
+@dataclass
+class Note:
+    """One held note from a scale take."""
+    start: float
+    end: float
+    hz: float
+
+
+@dataclass
+class ScaleStats:
+    duration: float
+    notes: list[Note]
+    f0_low: float
+    #: 본인이 "여기부터 힘들어요"를 누른 지점. 곡 추천의 편안함 경계.
+    comfort_high: float
+    #: 가성과 성대 긴장을 포함해 실제로 낸 가장 높은 지속음.
+    absolute_high: float
+
+
+def _segment_notes(f0: np.ndarray, times: np.ndarray, voiced: np.ndarray) -> list[Note]:
+    """Held notes, in the order they were sung.
+
+    A scale is structured in a way a song is not: the singer stops on each step. That structure is
+    worth using. A percentile over the whole take would rank a single octave-error from the tracker
+    alongside a note the singer actually held, and at the top of a range -- exactly where the
+    reading matters -- one such frame moves the answer by twelve semitones.
+    """
+    notes: list[Note] = []
+    index = 0
+    while index < len(voiced):
+        if not voiced[index]:
+            index += 1
+            continue
+        start = index
+        while index < len(voiced) and voiced[index]:
+            index += 1
+        if times[index - 1] - times[start] < MIN_NOTE_SECONDS:
+            continue
+        # Trim the onset and release: a singer slides into a note and falls off the end of it, and
+        # neither part is the note.
+        span = index - start
+        core = f0[start + span // 5 : index - span // 5]
+        core = core[np.isfinite(core)]
+        if core.size < 3:
+            continue
+        hz = float(np.median(core))
+        wobble = 12.0 * float(np.log2(core.max() / core.min())) if core.min() > 0 else 99.0
+        if wobble > MAX_NOTE_WOBBLE_SEMITONES:
+            continue
+        notes.append(Note(float(times[start]), float(times[index - 1]), hz))
+    return notes
+
+
+def analyse_scale(path: Path, comfort_hz: float = 0.0) -> ScaleStats:
+    """Range from a call-and-response scale take.
+
+    `comfort_hz` is the reference tone that was sounding when the singer said it had started to
+    hurt. It comes from the client because it is exact there -- the browser played that frequency --
+    and because comfort is a judgement only the singer can make. Nothing acoustic is a reliable
+    proxy for it.
+    """
+    import librosa
+
+    y, sr = librosa.load(path, sr=SAMPLE_RATE, mono=True)
+    duration = float(len(y)) / sr if sr else 0.0
+    hop = 256
+    f0, voiced_flag, _ = librosa.pyin(
+        y, fmin=70, fmax=1200, sr=sr, frame_length=1024, hop_length=hop,
+    )
+    times = librosa.times_like(f0, sr=sr, hop_length=hop)
+    voiced = np.isfinite(f0) & voiced_flag
+    notes = _segment_notes(f0, times, voiced)
+
+    if not notes:
+        return ScaleStats(duration, [], 0.0, 0.0, 0.0)
+
+    pitches = [note.hz for note in notes]
+    low = min(pitches)
+    absolute = max(pitches)
+    # The singer can stop before straining, so comfort is normally below the top note. Trust the
+    # marker, but it cannot sit above a note that was never reached.
+    comfort = min(comfort_hz, absolute) if comfort_hz > 0 else absolute
+    return ScaleStats(duration, notes, low, comfort, absolute)
+
+
+def scale_windows(stats: ScaleStats, total_seconds: float, ceiling_hz: float = 0.0
+                  ) -> list[tuple[float, float]]:
+    """(start, length) windows over the scale, spread evenly across the registers sung.
+
+    Notes above `ceiling_hz` are dropped. Past the comfort marker the singer is straining, and a
+    model fine-tuned on that learns the strain as part of who they are.
+    """
+    usable = [n for n in stats.notes if ceiling_hz <= 0 or n.hz <= ceiling_hz * 1.03]
+    if not usable:
+        return []
+    usable.sort(key=lambda n: n.hz)
+    # Evenly across the register, not across time: the point of the clip is pitch coverage.
+    budget = total_seconds
+    picks: list[tuple[float, float]] = []
+    wanted = max(1, min(len(usable), int(total_seconds // 1.2)))
+    for fraction in np.linspace(0.0, 1.0, wanted):
+        note = usable[min(len(usable) - 1, int(fraction * (len(usable) - 1)))]
+        length = min(budget, note.end - note.start)
+        if length < 0.3:
+            continue
+        window = (note.start, length)
+        if window in picks:
+            continue
+        picks.append(window)
+        budget -= length
+        if budget <= 0.3:
+            break
+    return [(start, length) for start, length in sorted(picks)]
 
 
 def analyse(path: Path) -> RecordingStats:

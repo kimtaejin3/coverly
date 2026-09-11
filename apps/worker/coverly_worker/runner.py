@@ -109,8 +109,19 @@ def split_title(raw: str) -> tuple[str, str]:
     return title, artist
 
 
+#: The model does not fall off a cliff above what it was trained on -- it is f0-conditioned, so
+#: quality decays over a few semitones. Pulling a song down for one note just past the edge would
+#: cost more than it saves.
+CEILING_HEADROOM_SEMITONES = 2.0
+#: How far below median alignment we will go to rescue the top notes. Past this the song simply
+#: does not suit the voice, and dropping it further trades a strained peak for a whole cover that
+#: sits too low to sound like anyone.
+MAX_EXTRA_DROP_SEMITONES = 5.0
+
+
 def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones: float = 1.5,
-                     max_semitones: int = 24) -> int:
+                     max_semitones: int = 24, train_high: float = 0.0,
+                     source_peak: float = 0.0) -> int:
     """Whole semitones to bring the song into the voice's register, or 0 when it already fits.
 
     This used to round to whole octaves, because shifting the vocal alone by anything else leaves
@@ -118,6 +129,12 @@ def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones
     covering a vocal at 429 Hz needs -17 semitones and got -12, leaving five semitones the model
     never learned. The pipeline now moves the instrumental too, so any interval is available --
     see `split_shift`.
+
+    Aligning medians alone is not enough. A song with a wide range can sit perfectly on the median
+    and still put its chorus well above anything the checkpoint has heard, which is where a cover
+    stops sounding like the person. When the voice's ceiling is known the shift is pulled down far
+    enough to bring the song's own peak under it, bounded so the rest of the song does not end up
+    in a register the singer never uses.
     """
     try:
         import numpy as np
@@ -132,6 +149,10 @@ def auto_pitch_shift(vocal_path: Path, reference_path: Path, tolerance_semitones
         return 0
 
     distance = 12 * float(np.log2(target / source))
+    if train_high > 0 and source_peak > 0:
+        ceiling = train_high * (2.0 ** (CEILING_HEADROOM_SEMITONES / 12.0))
+        needed = 12 * float(np.log2(ceiling / source_peak))
+        distance = max(min(distance, needed), distance - MAX_EXTRA_DROP_SEMITONES)
     if abs(distance) <= tolerance_semitones:
         return 0
     return int(round(max(-max_semitones, min(max_semitones, distance))))
@@ -147,6 +168,7 @@ def process_job(
     device: str = "cuda",
     gpu_type: str = "L4",
     reference_path: Path | None = None,
+    voice_train_high: float = 0.0,
 ) -> str:
     """Run one job to completion. Returns the storage path of the finished cover.
 
@@ -172,7 +194,9 @@ def process_job(
 
             pitch_shift = job.pitch_shift
             if pitch_shift == 0 and reference_path and reference_path.is_file():
-                pitch_shift = auto_pitch_shift(stems.vocals, reference_path)
+                pitch_shift = auto_pitch_shift(stems.vocals, reference_path,
+                                               train_high=voice_train_high,
+                                               source_peak=source_stats.f0_peak)
 
             result = run_generation(
                 GenerationRequest(

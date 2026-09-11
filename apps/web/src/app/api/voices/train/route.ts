@@ -8,7 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 
 const VOICE_FIELDS =
   "id, name, status, error_message, training_progress, training_stage, " +
-  "f0_low, f0_median, f0_high, f0_peak, train_count, created_at";
+  "f0_low, f0_median, f0_high, f0_peak, " +
+  "f0_comfort_high, f0_absolute_high, f0_train_high, train_count, created_at";
 
 /** Deterministic id for one training run, shared by the charge and any later refund. */
 export function trainingRunRef(voiceId: string, run: number): string {
@@ -52,10 +53,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { sourcePath, name, voiceId: requestedId } = await request.json().catch(() => ({}));
+  const {
+    sourcePath,
+    name,
+    voiceId: requestedId,
+    scalePath,
+    comfortHz,
+  } = await request.json().catch(() => ({}));
   if (typeof sourcePath !== "string" || !sourcePath.startsWith(`${user.id}/`)) {
     return NextResponse.json({ error: "녹음을 먼저 올려주세요." }, { status: 400 });
   }
+  // The scale take is optional: a voice trains without it, just with a range read off the song
+  // instead of measured. Both fields are checked the same way as the recording — a path outside
+  // the caller's own prefix is not theirs to point at.
+  const scale =
+    typeof scalePath === "string" && scalePath.startsWith(`${user.id}/`) ? scalePath : null;
+  // The browser knew exactly which tone was sounding when the singer marked the limit, so this
+  // arrives measured rather than guessed. Bound it to the range a human voice occupies so a
+  // malformed number cannot poison the song matching.
+  const comfort =
+    typeof comfortHz === "number" && comfortHz >= 70 && comfortHz <= 1200
+      ? Math.round(comfortHz * 100) / 100
+      : null;
 
   const admin = createAdminClient();
   const { data: existing } = await admin
@@ -123,6 +142,8 @@ export async function POST(request: NextRequest) {
     tags: ["내 목소리"],
     owner_user_id: user.id,
     training_audio_url: sourcePath,
+    scale_audio_url: scale,
+    f0_comfort_high: comfort,
     created_by_recording: true,
     status: "queued",
     is_active: false,

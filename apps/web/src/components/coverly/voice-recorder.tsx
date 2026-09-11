@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { PRACTICE_SONGS } from "@/components/coverly/practice-songs";
 import { createClient } from "@/lib/supabase/client";
+import { noteName } from "@/lib/pitch";
 import { CreditDialog } from "@/components/coverly/credit-dialog";
 import { RangeGauge } from "@/components/coverly/range-gauge";
+import { ScaleTest, type ScaleResult } from "@/components/coverly/scale-test";
 import { TARGET_SEMITONES, useVoiceMeter } from "@/components/coverly/use-voice-meter";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,9 @@ import { cn } from "@/lib/utils";
  * learns the register the recording contains, so a 30-second take in one comfortable octave
  * produces a voice that falls apart everywhere else. Two keys doubles the range for the same
  * effort.
+ *
+ * A scale take comes first, and is optional. It is the only place a ceiling gets measured rather
+ * than inferred from whichever song they chose — see `ScaleTest`.
  */
 const TARGET_SECONDS = 60;
 const MIN_SECONDS = 30;
@@ -48,6 +53,12 @@ export function VoiceRecorder({
   // Refused for want of credits — offer the top-up right here rather than sending them hunting
   // through the account menu with a finished recording in hand.
   const [needCredits, setNeedCredits] = useState(false);
+
+  // Skipping is allowed: the voice trains either way, it just loses the measured range. Making
+  // this mandatory would put another wall in front of a funnel that already asks for 30 seconds
+  // of singing and twenty minutes of waiting.
+  const [scale, setScale] = useState<ScaleResult | null>(null);
+  const [scaleDone, setScaleDone] = useState(false);
 
   const [songId, setSongId] = useState(PRACTICE_SONGS[0].id);
   const song = PRACTICE_SONGS.find((item) => item.id === songId) ?? PRACTICE_SONGS[0];
@@ -107,41 +118,56 @@ export function VoiceRecorder({
     }
   }
 
+  /** Straight to storage, like song uploads: a function request body cannot carry audio. */
+  async function upload(source: Blob, label: string): Promise<string | null> {
+    // Storage validates the declared type against the bucket, so strip the codec parameter:
+    // "audio/webm;codecs=opus" is not in the allow list, "audio/webm" is.
+    const contentType = (source.type || "audio/webm").split(";")[0];
+    const file = new File([source], label, { type: contentType });
+
+    const signed = await fetch("/api/uploads/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contentType, size: file.size, purpose: "recording" }),
+    });
+    const info = await signed.json().catch(() => ({}));
+    if (!signed.ok) {
+      toast.error(info.error ?? "업로드를 준비하지 못했어요.");
+      return null;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase.storage
+      .from("uploads")
+      .uploadToSignedUrl(info.path, info.token, file, { contentType: file.type });
+    if (error) {
+      toast.error("녹음을 올리지 못했어요.");
+      return null;
+    }
+    return info.path as string;
+  }
+
   async function submit() {
     if (!blob) return;
     setSubmitting(true);
     try {
-      // Storage validates the declared type against the bucket, so strip the codec parameter:
-      // "audio/webm;codecs=opus" is not in the allow list, "audio/webm" is.
-      const contentType = (blob.type || "audio/webm").split(";")[0];
-      const file = new File([blob], "voice", { type: contentType });
+      const sourcePath = await upload(blob, "voice");
+      if (!sourcePath) return;
 
-      // Recordings go straight to storage like song uploads: a function request body cannot
-      // carry them, and there is no reason for the audio to pass through the app.
-      const signed = await fetch("/api/uploads/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentType, size: file.size, purpose: "recording" }),
-      });
-      const info = await signed.json().catch(() => ({}));
-      if (!signed.ok) {
-        toast.error(info.error ?? "업로드를 준비하지 못했어요.");
-        return;
-      }
-
-      const supabase = createClient();
-      const { error } = await supabase.storage
-        .from("uploads")
-        .uploadToSignedUrl(info.path, info.token, file, { contentType: file.type });
-      if (error) {
-        toast.error("녹음을 올리지 못했어요.");
-        return;
-      }
+      // The scale is a nicety, not a requirement. If its upload fails the voice still trains, so
+      // the failure is swallowed rather than thrown in the singer's face after they finished.
+      let scalePath: string | null = null;
+      if (scale) scalePath = await upload(scale.blob, "scale").catch(() => null);
 
       const response = await fetch("/api/voices/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourcePath: info.path, ...(voiceId ? { voiceId } : {}) }),
+        body: JSON.stringify({
+          sourcePath,
+          ...(voiceId ? { voiceId } : {}),
+          ...(scalePath ? { scalePath } : {}),
+          ...(scale?.comfortHz ? { comfortHz: scale.comfortHz } : {}),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -167,6 +193,23 @@ export function VoiceRecorder({
   const enough = seconds >= MIN_SECONDS;
   const narrow = span > 0 && span < TARGET_SEMITONES * 0.6;
 
+  // Step one of two. The scale measures the range; the song teaches the timbre. Asking for both
+  // at once produced a take that did neither well.
+  if (!scaleDone) {
+    return (
+      <>
+        <CreditDialog open={needCredits} onOpenChange={setNeedCredits} />
+        <ScaleTest
+          onDone={(result) => {
+            setScale(result);
+            setScaleDone(true);
+          }}
+          onCancel={() => setScaleDone(true)}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-xl border border-dashed border-border bg-card/50 p-4">
       <CreditDialog open={needCredits} onOpenChange={setNeedCredits} />
@@ -177,6 +220,38 @@ export function VoiceRecorder({
           키로 불러주세요. 음역이 넓을수록 결과가 좋아져요.
         </p>
       </div>
+
+      {scale ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/8 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">
+            편한 한계{" "}
+            <span className="font-medium text-foreground">{noteName(scale.comfortHz)}</span>
+            {scale.topHz > scale.comfortHz ? (
+              <>
+                {" · "}최고 <span className="font-medium text-foreground">{noteName(scale.topHz)}</span>
+              </>
+            ) : null}
+          </span>
+          <button
+            type="button"
+            className="shrink-0 text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            onClick={() => {
+              setScale(null);
+              setScaleDone(false);
+            }}
+          >
+            다시 재기
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setScaleDone(false)}
+          className="w-full rounded-lg bg-secondary/50 px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary"
+        >
+          음역대를 재면 부를 수 있는 곡을 정확하게 골라드려요 · 재러 가기
+        </button>
+      )}
 
       <div className="space-y-2">
         <label htmlFor="practice-song" className="sr-only">

@@ -42,6 +42,10 @@ class VoiceConfig:
     """Fine-tuned checkpoint name in the models volume; None means fall back to zero-shot."""
     model_reference: str | None
     sample_path: str | None
+    #: Highest pitch the fine-tune actually saw. The key decision is a property of the model, not
+    #: of the singer's throat -- nobody sings the cover, so nothing can strain, but a note above
+    #: what the checkpoint was trained on comes back with the timbre smeared.
+    f0_train_high: float = 0.0
 
 
 class Backend:
@@ -213,11 +217,16 @@ class Backend:
 
     def load_voice(self, voice_id: str) -> VoiceConfig | None:
         rows = self._rest("GET", "voices", params={
-            "id": f"eq.{voice_id}", "select": "id,name,model_reference,sample_url"})
+            "id": f"eq.{voice_id}",
+            "select": "id,name,model_reference,sample_url,f0_train_high,f0_peak"})
         if not rows:
             return None
         row = rows[0]
-        return VoiceConfig(row["id"], row["name"], row.get("model_reference"), row.get("sample_url"))
+        # Voices trained before the scale take have no measured ceiling; f0_peak is the closest
+        # thing they have and is what the old behaviour effectively used.
+        ceiling = row.get("f0_train_high") or row.get("f0_peak") or 0
+        return VoiceConfig(row["id"], row["name"], row.get("model_reference"),
+                           row.get("sample_url"), float(ceiling))
 
     def user_email(self, user_id: str) -> str | None:
         """The account's email, from the Auth admin API (the service key is already on the client)."""

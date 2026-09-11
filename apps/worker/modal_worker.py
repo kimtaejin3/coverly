@@ -106,6 +106,7 @@ def process_cover(cover_id: str) -> dict:
         worker_id=os.environ.get("MODAL_TASK_ID", "modal"),
         device="cuda", gpu_type=GPU,
         reference_path=reference if reference.exists() else None,
+        voice_train_high=voice.f0_train_high if voice else 0.0,
     )
     return {"cover_id": cover_id, "result": result_path, "seconds": time.time() - started}
 
@@ -162,7 +163,8 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
 
     from coverly_worker.audio import probe_duration, trim
     from coverly_worker.backend import Backend
-    from coverly_worker.recording import analyse, reference_windows, validate
+    from coverly_worker.recording import (analyse, analyse_scale, reference_windows,
+                                          scale_windows, validate)
 
     backend = Backend()
 
@@ -171,11 +173,16 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
                       json={"training_stage": stage, "training_progress": progress, **extra})
 
     rows = backend._rest("GET", "voices", params={  # noqa: SLF001 - worker-only module
-        "id": f"eq.{voice_id}", "select": "id,training_audio_url,owner_user_id,train_count"})
+        "id": f"eq.{voice_id}",
+        "select": "id,training_audio_url,scale_audio_url,f0_comfort_high,owner_user_id,train_count"})
     if not rows or not rows[0].get("training_audio_url"):
         return {"voice_id": voice_id, "skipped": "no training audio"}
     owner = rows[0].get("owner_user_id")
     run = int(rows[0].get("train_count") or 1)
+    scale_url = rows[0].get("scale_audio_url")
+    # The browser knew the exact frequency it was sounding when the singer said it had begun to
+    # hurt, so the marker arrives with the request rather than being guessed from the audio.
+    marked_comfort = float(rows[0].get("f0_comfort_high") or 0.0)
 
     report("준비 중", 2, status="training", error_message=None)
 
@@ -200,6 +207,24 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
             if complaint:
                 raise ValueError(complaint)
 
+            # The scale take, when there is one. It is the only place the top of a range is
+            # measured rather than inferred: a song covers whatever the song covers, and the 98th
+            # percentile of it is neither the comfortable ceiling nor the real one.
+            scale = scale_source = None
+            if scale_url:
+                try:
+                    scale_raw = backend.download("uploads", scale_url, work / "scale-raw.webm")
+                    scale_source = work / "scale.wav"
+                    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(scale_raw),
+                                    "-ac", "1", "-ar", "44100",
+                                    "-af", "highpass=f=70,loudnorm=I=-18:TP=-2:LRA=11",
+                                    str(scale_source)], check=True)
+                    scale = analyse_scale(scale_source, marked_comfort)
+                except Exception:  # noqa: BLE001
+                    # A bad scale take costs the range readings, not the voice. The song recording
+                    # alone still trains a usable model, so this must never fail the run.
+                    scale = scale_source = None
+
             duration = probe_duration(source)
             data_dir = work / "clips"
             data_dir.mkdir()
@@ -209,6 +234,20 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
                 index += 1
                 trim(source, data_dir / f"{voice_id}_{index:03d}.wav", offset, length, channels=1)
                 offset += length
+
+            # Scale notes join the training set, but only up to the comfort marker. Above it the
+            # singer is straining, and a fine-tune cannot tell strain from timbre -- it would learn
+            # the squeeze as part of who this person is and put it in every cover.
+            if scale and scale_source and scale.comfort_high > 0:
+                usable = [n for n in scale.notes if n.hz <= scale.comfort_high * 1.03]
+                cutoff = max((n.end for n in usable), default=0.0)
+                pos = 0.0
+                while cutoff - pos >= 3.0:
+                    length = min(15.0, cutoff - pos)
+                    index += 1
+                    trim(scale_source, data_dir / f"{voice_id}_{index:03d}.wav", pos, length,
+                         channels=1)
+                    pos += length
             clip_count = index
 
             # A short recording overfits long before 1500 steps. Scale with what was actually sung
@@ -252,13 +291,24 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
             (dest / "config.yml").write_bytes(Path(SING_CONFIG).read_bytes())
             info = {"train_seconds": _time.time() - started}
 
-            # The provider copies timbre from the reference, so it must land beside the checkpoint
-            # -- and it must span the singer. Cutting the first 22 seconds captured only whichever
-            # key they started in, which is the whole reason the catalogue voices sounded wrong
-            # outside one octave.
-            windows = reference_windows(stats)
+            # The provider copies timbre from this clip, so it lands beside the checkpoint and it
+            # has to span the singer -- cutting the first 22 seconds captured only whichever key
+            # they started in, which is why the catalogue voices fell apart outside one octave.
+            #
+            # It is built from two sources because it has two jobs. The scale sweeps the registers
+            # evenly, which is what `reference_windows` was carving song audio up to imitate; the
+            # song carries vowels and consonants, which a scale on one syllable does not.
             parts = []
-            for n, (start, length) in enumerate(windows):
+            scale_used = 0.0
+            if scale and scale_source:
+                for n, (start, length) in enumerate(scale_windows(
+                        scale, total_seconds=12.0, ceiling_hz=scale.comfort_high)):
+                    part = work / f"refscale{n}.wav"
+                    trim(scale_source, part, start, length, channels=1)
+                    parts.append(part)
+                    scale_used += length
+            for n, (start, length) in enumerate(reference_windows(
+                    stats, total_seconds=max(9.0, 21.0 - scale_used))):
                 part = work / f"ref{n}.wav"
                 trim(source, part, start, length, channels=1)
                 parts.append(part)
@@ -276,16 +326,36 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
             (VOICES_DIR / f"{voice_id}.wav").write_bytes(reference.read_bytes())
             models.commit()
 
+            # Three ceilings, three consumers. The first two are facts about a throat and drive
+            # what we tell people they can sing; the third is a fact about this checkpoint and is
+            # what the key decision reads. They are only equal when there is no scale take.
+            if scale and scale.absolute_high > 0:
+                train_high = max(stats.f0_peak, scale.comfort_high)
+                range_columns = {
+                    "f0_comfort_high": round(scale.comfort_high, 2),
+                    "f0_absolute_high": round(scale.absolute_high, 2),
+                    "f0_train_high": round(train_high, 2),
+                }
+            else:
+                range_columns = {
+                    "f0_comfort_high": round(stats.f0_high, 2),
+                    "f0_absolute_high": round(stats.f0_peak, 2),
+                    "f0_train_high": round(stats.f0_peak, 2),
+                }
+
         backend._rest("PATCH", "voices", params={"id": f"eq.{voice_id}"},  # noqa: SLF001
                       json={"status": "ready", "model_reference": voice_id, "is_active": True,
                             "training_progress": 100, "training_stage": None,
                             "f0_low": round(stats.f0_low, 2),
                             "f0_median": round(stats.f0_median, 2),
                             "f0_high": round(stats.f0_high, 2),
-                            "f0_peak": round(stats.f0_peak, 2)})
+                            "f0_peak": round(stats.f0_peak, 2),
+                            **range_columns})
         notify_owner(backend, owner, ready=True)
         return {"voice_id": voice_id, "clips": clip_count, "steps": total_steps,
                 "range_semitones": round(stats.span_semitones, 1),
+                "scale_notes": len(scale.notes) if scale else 0,
+                **range_columns,
                 "train_seconds": info["train_seconds"]}
     except Exception as exc:  # noqa: BLE001 - the owner has to learn why their voice failed
         backend._rest("PATCH", "voices", params={"id": f"eq.{voice_id}"},  # noqa: SLF001

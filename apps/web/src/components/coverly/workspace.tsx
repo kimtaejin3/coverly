@@ -260,7 +260,18 @@ export function Workspace({
           </Field>
 
           <div className="mb-5">
-            <SongFinder voicePeak={selectedPersonal?.f0_peak ?? personalVoices[0]?.f0_peak ?? null} />
+            <SongFinder
+              comfortHigh={
+                selectedPersonal?.f0_comfort_high ?? personalVoices[0]?.f0_comfort_high ?? null
+              }
+              absoluteHigh={
+                selectedPersonal?.f0_absolute_high ??
+                personalVoices[0]?.f0_absolute_high ??
+                selectedPersonal?.f0_peak ??
+                personalVoices[0]?.f0_peak ??
+                null
+              }
+            />
           </div>
 
           <Field step={3} label="목소리 고르기">

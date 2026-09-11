@@ -23,6 +23,12 @@ export interface PersonalVoice {
   f0_median: number | null;
   f0_high: number | null;
   f0_peak: number | null;
+  /** Comfortable ceiling, marked by the singer on the scale take. */
+  f0_comfort_high: number | null;
+  /** Reached with strain or falsetto. What we show, and the top of what we will recommend. */
+  f0_absolute_high: number | null;
+  /** What the fine-tune actually saw. A model fact, not a throat fact -- the key decision reads it. */
+  f0_train_high: number | null;
 }
 
 /** A personal voice, shaped like a catalogue Voice so the rest of the app need not special-case it. */
@@ -213,7 +219,8 @@ function VoiceRow({
           {voice.f0_high ? (
             <RangeGauge
               lowHz={voice.f0_low ?? 0}
-              highHz={voice.f0_high}
+              highHz={voice.f0_absolute_high ?? voice.f0_peak ?? voice.f0_high}
+              comfortHz={voice.f0_comfort_high ?? 0}
               className="rounded-lg bg-secondary/40 px-2.5 py-2"
             />
           ) : null}
