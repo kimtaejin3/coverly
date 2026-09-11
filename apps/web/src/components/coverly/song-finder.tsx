@@ -30,6 +30,8 @@ export function SongFinder({
   modalHigh,
   falsettoHigh,
   onMeasure,
+  open,
+  onOpenChange,
 }: {
   comfortHigh: number | null;
   /** 진성 ceiling. Matching compares to this because song 최고음 is 진성 in 77 of 78 rows. */
@@ -38,10 +40,12 @@ export function SongFinder({
   falsettoHigh: number | null;
   /** Opens the scale. Offered from inside the list, where the gap is felt. */
   onMeasure?: () => void;
+  /** Controlled by the parent so it can put the list back after a measurement. */
+  open: boolean;
+  onOpenChange: (next: boolean) => void;
 }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
   const [genre, setGenre] = useState<(typeof GENRES)[number]>("전체");
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     // Fetched up front now, not on open: the trigger row shows a count, so the number has to be
@@ -83,7 +87,7 @@ export function SongFinder({
           button that actually makes a cover off the bottom of the screen. */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
         className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card/50 px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-card"
       >
         <MusicNotes className="size-4 shrink-0 text-primary" aria-hidden />
@@ -102,7 +106,7 @@ export function SongFinder({
 
       <ResponsiveModal
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={onOpenChange}
         title="내 음역대 노래 찾기"
         description={
           modalHigh
@@ -115,7 +119,7 @@ export function SongFinder({
             <button
               type="button"
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 onMeasure();
               }}
               className="flex w-full items-center justify-between gap-2 rounded-lg bg-primary/8 px-3 py-2.5 text-left text-xs transition-colors hover:bg-primary/12"

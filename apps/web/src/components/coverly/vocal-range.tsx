@@ -32,10 +32,18 @@ export function VocalRangeCard({
 }) {
   const [range, setRange] = useState<VocalRange>(initial);
   const [measuring, setMeasuring] = useState(false);
+  const [songsOpen, setSongsOpen] = useState(false);
+  // Measuring from inside the song list closes it. Put it back afterwards -- the whole reason they
+  // went to measure was to see that list change, and leaving them at the sidebar hides the payoff.
+  const [returnToSongs, setReturnToSongs] = useState(false);
   const measured = range.modalHigh !== null;
 
   async function save(next: VocalRange) {
     setRange(next);
+    if (returnToSongs) {
+      setReturnToSongs(false);
+      setSongsOpen(true);
+    }
     if (!signedIn) return;
     try {
       const response = await fetch("/api/me/range", {
@@ -60,7 +68,14 @@ export function VocalRangeCard({
     <div className="space-y-1.5">
       <ResponsiveModal
         open={measuring}
-        onOpenChange={setMeasuring}
+        onOpenChange={(next) => {
+          setMeasuring(next);
+          if (!next && returnToSongs) {
+            // Backed out rather than finished: still put the list back where they left it.
+            setReturnToSongs(false);
+            setSongsOpen(true);
+          }
+        }}
         title={measured ? "음역대 다시 재기" : "내 음역대 재기"}
         description="들려주는 음을 따라 부르면 부를 수 있는 곡을 골라드려요. 30초쯤 걸립니다."
       >
@@ -82,7 +97,10 @@ export function VocalRangeCard({
 
       <button
         type="button"
-        onClick={() => setMeasuring(true)}
+        onClick={() => {
+          setReturnToSongs(false);
+          setMeasuring(true);
+        }}
         className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card/50 px-3 py-2.5 text-left transition-colors hover:border-primary/40 hover:bg-card"
       >
         <WaveSine className="size-4 shrink-0 text-primary" aria-hidden />
@@ -109,7 +127,12 @@ export function VocalRangeCard({
         comfortHigh={range.comfortHigh}
         modalHigh={range.modalHigh}
         falsettoHigh={range.falsettoHigh}
-        onMeasure={() => setMeasuring(true)}
+        open={songsOpen}
+        onOpenChange={setSongsOpen}
+        onMeasure={() => {
+          setReturnToSongs(true);
+          setMeasuring(true);
+        }}
       />
     </div>
   );
