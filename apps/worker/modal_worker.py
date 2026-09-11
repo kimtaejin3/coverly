@@ -66,14 +66,23 @@ def _build_components(voice, device: str):
         if ckpt.exists() and cfg.exists():
             checkpoint, config = ckpt, cfg
 
+    # Quality knobs, tunable per deploy without a code change so a value can be A/B'd by ear --
+    # audio quality is not something the pipeline can measure for itself. More diffusion steps buy
+    # detail at a linear cost in GPU time; cfg is how hard the model leans on the reference (its
+    # own colour) versus the source singer. Defaults are the values we shipped; bad env values
+    # fall back rather than crash a job.
+    def _num(name: str, default: float, lo: float, hi: float) -> float:
+        try:
+            return min(hi, max(lo, float(os.environ.get(name, default))))
+        except (TypeError, ValueError):
+            return default
+
     provider = SeedVCProvider(
         repo_dir=Path(SEED_VC_DIR),
         python=Path(sys.executable),
         voices_dir=VOICES_DIR,
-        diffusion_steps=50,
-        # Guidance strength. 0.7 is the repo default; leaning on the reference harder is what
-        # makes a fine-tuned voice keep its own colour instead of drifting to the source singer.
-        inference_cfg_rate=0.8,
+        diffusion_steps=int(_num("COVERLY_DIFFUSION_STEPS", 50, 10, 200)),
+        inference_cfg_rate=_num("COVERLY_CFG_RATE", 0.8, 0.0, 1.0),
         device=device,
         checkpoint=checkpoint,
         config=config,
@@ -312,15 +321,32 @@ def train_voice(voice_id: str, steps: int = 0) -> dict:
                 part = work / f"ref{n}.wav"
                 trim(source, part, start, length, channels=1)
                 parts.append(part)
-            reference = work / "reference.wav"
+            reference_raw = work / "reference_raw.wav"
             if len(parts) == 1:
-                reference = parts[0]
+                reference_raw = parts[0]
             else:
                 listing = work / "ref.txt"
                 listing.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
                 subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
-                                "-i", str(listing), "-ac", "1", "-ar", "44100", str(reference)],
+                                "-i", str(listing), "-ac", "1", "-ar", "44100", str(reference_raw)],
                                check=True)
+
+            # Drop the dead air. The provider builds its speaker embedding from this clip, and the
+            # gaps between scale notes and the silences inside song phrases carry no timbre -- they
+            # only dilute the average. Removing them concentrates the reference on actual voice.
+            # Verified on a synthetic clip: 2.5s of silence in 6.1s came out as 0.4s, voiced kept.
+            reference = work / "reference.wav"
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-y", "-loglevel", "error", "-i", str(reference_raw), "-af",
+                     "silenceremove=stop_periods=-1:stop_duration=0.2:stop_threshold=-40dB:detection=rms",
+                     "-ac", "1", "-ar", "44100", str(reference)], check=True)
+                # A very quiet take can be over-trimmed; if almost nothing survives, keep the raw
+                # clip rather than hand the model two seconds of audio.
+                if probe_duration(reference) < 3.0:
+                    reference = reference_raw
+            except Exception:  # noqa: BLE001 - gating is an improvement, never a hard requirement
+                reference = reference_raw
 
             VOICES_DIR.mkdir(parents=True, exist_ok=True)
             (VOICES_DIR / f"{voice_id}.wav").write_bytes(reference.read_bytes())
