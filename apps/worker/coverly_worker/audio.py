@@ -77,16 +77,18 @@ def measure_loudness(path: Path) -> float | None:
 # the backing rather than level with it.
 VOCAL_LEAD_LU = 4.0
 
-# Where the finished mix lands when the source cannot be measured. -14 LUFS is the streaming
-# normalisation target, but nobody listens to a cover through a normaliser -- they play it right
-# after the song they uploaded, and commercial masters run -8 to -11 LUFS. Matching the source is
-# what makes the two sound like the same volume; see `match_loudness`.
-TARGET_LUFS = -14.0
+# Where the finished cover lands. -14 (the streaming-normalisation target) shipped covers that
+# played back noticeably quieter than released music, because nobody hears a cover through a
+# normaliser -- they play it next to commercial masters, which run about -8 to -11 LUFS. So covers
+# now land loud, near where a released track sits, rather than matching a quietly-mastered upload.
+# Measured on a real mix: -10 LUFS came out at -1.0 dBTP, clear of intersample clipping.
+TARGET_LUFS = -10.0
 
-# Bounds for matching the source. The floor keeps a quietly mastered upload from producing a
-# cover nobody can hear; the ceiling is where pushing a limiter this hard starts to pump, and the
-# instrumental arrives already mastered so there is little headroom left to take.
-LOUDNESS_MATCH_RANGE = (-16.0, -8.0)
+# Covers land in this band. It used to track the source across a wide range, which let a quiet
+# upload make a quiet cover -- the whole complaint. Narrowed and lifted so everything comes out
+# loud: the floor keeps even a quiet source commercial-loud, and the ceiling is held at -9 rather
+# than -8 because a real mix pushed to -9 already reaches -0.4 dBTP and -8 would clip.
+LOUDNESS_MATCH_RANGE = (-11.0, -9.0)
 
 
 def match_loudness(source_lufs: float | None) -> float:
