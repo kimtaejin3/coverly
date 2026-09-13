@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CaretRight, MusicNotes } from "@phosphor-icons/react";
+import { CaretRight, MagnifyingGlass, MusicNotes, X } from "@phosphor-icons/react";
 
 import type { SongRange } from "@/app/api/songs/route";
 import { noteName } from "@/lib/pitch";
@@ -23,6 +23,32 @@ interface Ranked {
   shift: number | null;
 }
 
+/**
+ * The key filters, as buttons.
+ *
+ * Matching only ever drops the key (a song above the range) or leaves it ("편하게"), so there is no
+ * +key -- every option here is 0 or a drop. -1 through -3 are the keys a 노래방 singer actually
+ * reaches for; everything past that is bundled so the row does not become a wall of chips.
+ */
+type KeyFilter = "all" | "comfort" | -1 | -2 | -3 | "deep";
+const KEY_FILTERS: { value: KeyFilter; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "comfort", label: "편하게" },
+  { value: -1, label: "-1키" },
+  { value: -2, label: "-2키" },
+  { value: -3, label: "-3키" },
+  { value: "deep", label: "-4키+" },
+];
+
+function matchesFilter(item: Ranked, filter: KeyFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "comfort") return item.tier === "comfort";
+  if (filter === "deep") return item.tier === "transpose" && (item.shift ?? 0) <= -4;
+  return item.tier === "transpose" && item.shift === filter;
+}
+
+const norm = (s: string) => s.normalize("NFC").toLowerCase();
+
 export function SongFinder({
   modalHigh,
   falsettoHigh,
@@ -41,6 +67,8 @@ export function SongFinder({
   onOpenChange: (next: boolean) => void;
 }) {
   const [songs, setSongs] = useState<SongRange[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
 
   useEffect(() => {
     // Fetched up front now, not on open: the trigger row shows a count, so the number has to be
@@ -70,6 +98,15 @@ export function SongFinder({
     () => ranked.filter((item) => item.tier === "comfort").length,
     [ranked],
   );
+
+  const visible = useMemo(() => {
+    const q = norm(query.trim());
+    return ranked.filter((item) => {
+      if (!matchesFilter(item, keyFilter)) return false;
+      if (!q) return true;
+      return norm(item.song.title).includes(q) || norm(item.song.artist).includes(q);
+    });
+  }, [ranked, query, keyFilter]);
 
   return (
     <>
@@ -124,23 +161,63 @@ export function SongFinder({
             </button>
           ) : null}
 
-          {modalHigh ? (
-            <p className="rounded-lg bg-primary/8 px-3 py-2 text-xs leading-relaxed">
-              진성 최고 <span className="font-medium">{noteName(modalHigh)}</span>
-              {comfortCount > 0 ? (
-                <span className="text-muted-foreground">
-                  {" — "}이 중 <span className="font-medium text-foreground">{comfortCount}곡</span>은
-                  키 안 내리고 부를 수 있어요
-                </span>
+          {/* Search + key filter, stuck to the top so they stay reachable while scrolling past a
+              thousand songs. The whole block shares one background so the list scrolls under it. */}
+          <div className="sticky top-0 z-10 -mx-4 space-y-2 bg-popover px-4 pt-0.5 pb-2">
+            <div className="relative">
+              <MagnifyingGlass
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <input
+                type="text"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="곡·가수 검색"
+                className="w-full rounded-lg border border-border bg-card py-2 pr-9 pl-9 text-sm outline-none focus:border-primary/50"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="검색어 지우기"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
               ) : null}
-            </p>
-          ) : null}
+            </div>
+
+            {modalHigh ? (
+              <div className="scroll-subtle flex gap-1 overflow-x-auto pb-0.5">
+                {KEY_FILTERS.map((f) => (
+                  <button
+                    key={String(f.value)}
+                    type="button"
+                    onClick={() => setKeyFilter(f.value)}
+                    className={cn(
+                      "shrink-0 rounded-full px-3 py-1.5 text-xs transition-colors",
+                      keyFilter === f.value
+                        ? "bg-primary/15 font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-secondary",
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
           {songs === null ? (
             <p className="py-6 text-center text-xs text-muted-foreground">불러오는 중…</p>
+          ) : visible.length === 0 ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              {query ? `'${query.trim()}' 검색 결과가 없어요` : "해당하는 곡이 없어요"}
+            </p>
           ) : (
             <ul className="space-y-0.5">
-              {ranked.map(({ song, tier, shift }) => (
+              {visible.map(({ song, tier, shift }) => (
                 <li
                   key={`${song.artist}-${song.title}`}
                   className="flex items-center gap-2.5 rounded-lg px-2 py-2 odd:bg-secondary/30"
