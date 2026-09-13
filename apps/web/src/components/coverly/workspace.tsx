@@ -16,6 +16,7 @@ import { MyVoice, asVoice, type PersonalVoice } from "@/components/coverly/my-vo
 import { SourcePicker, type ResolvedYouTube } from "@/components/coverly/source-picker";
 import type { UploadedSong } from "@/components/coverly/upload-dropzone";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { PREVIEW, UPLOAD, YOUTUBE_ENABLED } from "@/lib/config";
 import type { RecentCover } from "@/lib/supabase/queries";
 import type { Voice } from "@/lib/types";
@@ -67,6 +68,8 @@ export function Workspace({
   // this session, so a just-made voice exists there but not in the server-rendered personalVoices
   // prop below -- deriving the selection only from that prop turned a fresh voice into "undefined".
   const [pickedVoice, setPickedVoice] = useState<Voice | null>(null);
+  // 기본 off = 편한 키로 자동 조정. on = 원래 키 그대로(내 음역 넘으면 갈라짐).
+  const [keepOriginalKey, setKeepOriginalKey] = useState(false);
   const [coverId, setCoverId] = useState<string | null>(null);
   const [finished, setFinished] = useState<{
     id: string;
@@ -176,6 +179,7 @@ export function Workspace({
       body.set("voiceId", voiceId);
       body.set("startSeconds", String(Math.round(startSeconds)));
       if (full) body.set("full", "1");
+      if (keepOriginalKey) body.set("keepOriginalKey", "1");
       setLastSource({ path, title });
 
       const response = await fetch("/api/covers", { method: "POST", body });
@@ -286,7 +290,21 @@ export function Workspace({
             />
           </Field>
 
-          <div className="sticky bottom-0 -mx-1 bg-background/95 px-1 pt-3 pb-1 backdrop-blur-sm">
+          <div className="sticky bottom-0 -mx-1 space-y-3 bg-background/95 px-1 pt-3 pb-1 backdrop-blur-sm">
+            <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-border bg-card/50 px-3 py-2.5">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">원래 키로 부르기</span>
+                <span className="block text-xs leading-relaxed text-muted-foreground">
+                  내 음역을 넘는 고음은 갈라질 수 있어요. 끄면 편한 키로 자동 조정합니다.
+                </span>
+              </span>
+              <Switch
+                checked={keepOriginalKey}
+                onCheckedChange={setKeepOriginalKey}
+                aria-label="원래 키로 부르기"
+                className="mt-0.5 shrink-0"
+              />
+            </label>
             {signedIn ? (
               <Button
                 size="lg"

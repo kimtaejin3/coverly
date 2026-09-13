@@ -193,7 +193,9 @@ def process_job(
             source_stats = analyse(stems.vocals)
 
             pitch_shift = job.pitch_shift
-            if pitch_shift == 0 and reference_path and reference_path.is_file():
+            # auto_key 를 끄면 원래 키 그대로 둔다 -- 내 음역을 넘는 곡은 넘는 대로,
+            # "내 목소리로 부른 것처럼" 갈라지는 게 이 모드의 의도다.
+            if pitch_shift == 0 and job.auto_key and reference_path and reference_path.is_file():
                 pitch_shift = auto_pitch_shift(stems.vocals, reference_path,
                                                train_high=voice_train_high,
                                                source_peak=source_stats.f0_peak)

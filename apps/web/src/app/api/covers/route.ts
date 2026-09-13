@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
   const sourcePath = String(form.get("sourcePath") ?? "").trim();
   const voiceId = String(form.get("voiceId") ?? "");
   const wantsFull = String(form.get("full") ?? "") === "1";
+  // 원래 키 그대로(음역 넘으면 갈라짐) 모드. 기본은 편한 키 자동 조정.
+  const keepOriginalKey = String(form.get("keepOriginalKey") ?? "") === "1";
   const startSeconds = Number(form.get("startSeconds") ?? PREVIEW.defaultStartSeconds);
   const title = String(form.get("title") ?? "").slice(0, 120);
 
@@ -114,6 +116,7 @@ export async function POST(request: NextRequest) {
       source_type: youtube ? "youtube" : "upload",
       source_url: youtube?.url ?? null,
       original_file_url: sourcePath,
+      auto_key: !keepOriginalKey,
       client_ip: ip,
     })
     .select("id")

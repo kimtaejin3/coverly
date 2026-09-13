@@ -33,6 +33,8 @@ class Job:
     pitch_shift: int
     cover_type: str
     title: str = ""
+    #: true = 편한 키로 자동 조정(auto_pitch_shift). false = 원래 키 그대로(음역 넘으면 갈라짐).
+    auto_key: bool = True
 
 
 @dataclass
@@ -109,7 +111,7 @@ class Backend:
                 "id": f"eq.{job_id}",
                 "select": "id,cover_id,covers(user_id,voice_id,source_type,source_url,"
                           "original_file_url,preview_start_seconds,preview_duration_seconds,"
-                          "pitch_shift,type,title)",
+                          "pitch_shift,type,title,auto_key)",
             },
         )
         if not rows:
@@ -129,6 +131,7 @@ class Backend:
             pitch_shift=int(cover["pitch_shift"] or 0),
             cover_type=cover["type"],
             title=cover.get("title") or "",
+            auto_key=cover.get("auto_key", True) is not False,
         )
 
     def job_for_cover(self, cover_id: str) -> Job | None:
